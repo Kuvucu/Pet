@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petly 3D Cat — Web Viewer & GLB Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js & GLTF Loader / Exporter -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background: #121318;
+            color: #f3f4f6;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        .glass-panel {
+            background: rgba(24, 26, 32, 0.78);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .anim-btn.active {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            border-color: #fbbf24;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35);
+        }
+        .care-action-btn:active {
+            transform: scale(0.95);
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(0.8); }
+            100% { opacity: 0; transform: translateY(-45px) scale(1.25); }
+        }
+        .floating-emoji {
+            position: fixed;
+            pointer-events: none;
+            z-index: 50;
+            animation: floatUp 1.2s ease-out forwards;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+    </style>
+</head>
+<body class="relative select-none">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Navigation Bar: Petly Care Brand & Mode Switcher -->
+    <header class="fixed top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        <!-- Brand & Pet Profile Summary -->
+        <div class="glass-panel px-4 py-2.5 rounded-2xl flex items-center gap-3.5 pointer-events-auto shadow-xl">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/30 to-orange-600/20 border border-amber-500/40 flex items-center justify-center text-2xl shadow-inner">
+                🐾
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-bold text-base tracking-tight text-white">Petly Care</h1>
+                    <span id="pet-mood-badge" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        😺 Счастлив и мурчит
+                    </span>
+                </div>
+                <p class="text-xs text-gray-400">Питомец: <b class="text-gray-200">Барсик</b> • 2 года • Полосатый табби</p>
+            </div>
+        </div>
+
+        <!-- Navigation & Settings Toggle -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <!-- Quick Coat Selector in Header -->
+            <div class="glass-panel p-1 rounded-xl hidden md:flex items-center gap-1">
+                <button data-coat="brown" class="coat-btn active px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 border border-amber-500/50 text-amber-200 transition">
+                    Лесной
+                </button>
+                <button data-coat="ginger" class="coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+                    Рыжий
+                </button>
+                <button data-coat="silver" class="coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+                    Серебристый
+                </button>
+            </div>
+
+            <!-- Open 3D Studio & Model Settings Drawer -->
+            <button id="toggle-settings-btn" class="glass-panel hover:bg-white/10 transition px-4 py-2.5 rounded-xl text-xs font-medium text-gray-200 flex items-center gap-2 shadow-lg border border-white/15">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span>Настройки 3D и экспорт</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- LEFT PANEL: Pet Vitals & Care Schedule (Main Website Feature) -->
+    <aside class="fixed top-20 left-4 z-20 w-80 max-w-[calc(100vw-2rem)] space-y-3 pointer-events-auto">
+        <!-- Pet Status Bars -->
+        <div class="glass-panel p-4 rounded-2xl shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Показатели питомца</h2>
+                <span class="text-[11px] text-emerald-400 font-medium">Здоровье 98%</span>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <!-- Hunger / Satiety -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">🍗 Сытость</span>
+                        <span id="stat-hunger-text" class="font-semibold text-amber-400">82%</span>
+                    </div>
+                    <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-hunger-bar" class="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-500" style="width: 82%"></div>
+                    </div>
+                </div>
+
+                <!-- Happiness / Affection -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">💛 Настроение и ласка</span>
+                        <span id="stat-happy-text" class="font-semibold text-rose-400">90%</span>
+                    </div>
+                    <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-happy-bar" class="h-full bg-gradient-to-r from-rose-500 to-pink-400 rounded-full transition-all duration-500" style="width: 90%"></div>
+                    </div>
+                </div>
+
+                <!-- Energy / Activity -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">⚡ Энергия и тонус</span>
+                        <span id="stat-energy-text" class="font-semibold text-sky-400">75%</span>
+                    </div>
+                    <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-energy-bar" class="h-full bg-gradient-to-r from-sky-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 75%"></div>
+                    </div>
+                </div>
+
+                <!-- Grooming / Hygiene -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">✨ Уход за шерстью</span>
+                        <span id="stat-groom-text" class="font-semibold text-emerald-400">88%</span>
+                    </div>
+                    <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-groom-bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 88%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Care Checklist & Vet Reminders -->
+        <div class="glass-panel p-4 rounded-2xl shadow-2xl hidden sm:block">
+            <div class="flex items-center justify-between mb-2.5">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Дневник ухода на сегодня</h2>
+                <span id="tasks-counter" class="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-gray-300">2/4</span>
+            </div>
+            <div class="space-y-2 text-xs">
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input type="checkbox" checked class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-300 line-through opacity-60">Утреннее кормление (влажный корм)</span>
+                </label>
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input type="checkbox" checked class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-300 line-through opacity-60">Свежая вода в поилке</span>
+                </label>
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input id="task-brush" type="checkbox" class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-200">Вычесать шерсть (10 мин)</span>
+                </label>
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input id="task-play" type="checkbox" class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-200">Активная игра / прогулка</span>
+                </label>
+            </div>
+        </div>
+    </aside>
+
+    <!-- BOTTOM DOCK: Interactive Pet Care Actions -->
+    <footer class="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 w-auto max-w-[95vw] pointer-events-auto">
+        <div class="glass-panel px-3 py-2.5 rounded-2xl flex items-center gap-2 overflow-x-auto shadow-2xl border border-white/15">
+            <button id="care-feed-btn" class="care-action-btn px-4 py-2.5 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 flex items-center gap-2 transition whitespace-nowrap">
+                <span class="text-base">🍖</span> Покормить
+            </button>
+            <button id="care-pet-btn" class="care-action-btn px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 flex items-center gap-2 transition whitespace-nowrap">
+                <span class="text-base">🤚</span> Погладить
+            </button>
+            <button id="care-brush-btn" class="care-action-btn px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 flex items-center gap-2 transition whitespace-nowrap">
+                <span class="text-base">🪮</span> Вычесать
+            </button>
+            <button id="care-play-btn" class="care-action-btn px-4 py-2.5 rounded-xl text-xs font-semibold bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-200 flex items-center gap-2 transition whitespace-nowrap">
+                <span class="text-base">🧶</span> Поиграть / Прогулка
+            </button>
+            <button id="care-sleep-btn" class="care-action-btn px-4 py-2.5 rounded-xl text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-200 flex items-center gap-2 transition whitespace-nowrap">
+                <span class="text-base">💤</span> Отдых
+            </button>
+        </div>
+    </footer>
+
+    <!-- RIGHT DRAWER: Technical 3D Model Settings & Export (Hidden by Default) -->
+    <aside id="settings-drawer" class="fixed top-20 right-4 bottom-20 z-30 w-80 max-w-[calc(100vw-2rem)] glass-panel p-5 rounded-2xl shadow-2xl pointer-events-auto overflow-y-auto transition-all duration-300 translate-x-[120%] opacity-0">
+        <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+            <div>
+                <h2 class="text-sm font-bold text-white">Настройки 3D-модели</h2>
+                <p class="text-[11px] text-gray-400">Техническая студия и экспорт</p>
+            </div>
+            <button id="close-settings-btn" class="text-gray-400 hover:text-white p-1.5 rounded-lg bg-white/5">✕</button>
+        </div>
+
+        <!-- Coat Presets -->
+        <div class="mb-4">
+            <label class="block text-xs text-gray-300 mb-1.5 font-medium">Окрас шерсти (Tabby Coat)</label>
+            <div class="grid grid-cols-3 gap-1.5">
+                <button data-coat="brown" class="coat-btn active px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 border border-amber-500/50 text-amber-200 transition">
+                    Лесной Табби
+                </button>
+                <button data-coat="ginger" class="coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+                    Рыжий Кот
+                </button>
+                <button data-coat="silver" class="coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+                    Серебристый
+                </button>
+            </div>
+        </div>
+
+        <!-- Direct Animation Tester -->
+        <div class="mb-4 pt-3 border-t border-white/10">
+            <label class="block text-xs text-gray-300 mb-1.5 font-medium">Ручной тест анимаций (5 клипов)</label>
+            <div class="grid grid-cols-2 gap-1.5">
+                <button data-clip="All_Idle" class="anim-btn active col-span-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-transparent transition">
+                    ✨ Живой режим (Микс)
+                </button>
+                <button data-clip="Idle_Breathing" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    🫁 Дыхание
+                </button>
+                <button data-clip="Tail_Idle" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    🐈 Хвост
+                </button>
+                <button data-clip="Idle_LookAround" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    👀 Осмотр
+                </button>
+                <button data-clip="HeadTilt" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    😺 Наклон головы
+                </button>
+                <button data-clip="Walk" class="anim-btn col-span-2 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    🐾 Walk (Цикл ходьбы)
+                </button>
+            </div>
+        </div>
+
+        <!-- Interactive Sliders & Debug Toggles -->
+        <div class="space-y-3 text-xs pt-3 border-t border-white/10">
+            <div>
+                <div class="flex justify-between text-gray-300 mb-1">
+                    <span>Дыхание (Morph Target)</span>
+                    <span id="breathe-val" class="text-amber-400 font-mono">Авто</span>
+                </div>
+                <input id="breathe-slider" type="range" min="0" max="1" step="0.01" value="0.5" class="w-full accent-amber-500 cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Поворот головы за курсором</span>
+                <input id="track-mouse-toggle" type="checkbox" checked class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Показать скелет (25 костей)</span>
+                <input id="skeleton-toggle" type="checkbox" class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Полигональная сетка (Wireframe)</span>
+                <input id="wireframe-toggle" type="checkbox" class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Прозрачный фон сцены</span>
+                <input id="bg-toggle" type="checkbox" class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="pt-1">
+                <button id="reset-cam-btn" class="w-full py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-amber-400 text-xs font-medium transition">
+                    Сбросить ракурс камеры
+                </button>
+            </div>
+        </div>
+
+        <!-- GLB Import / Export Tools -->
+        <div class="space-y-2 pt-4 mt-4 border-t border-white/10">
+            <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+                <span>Активная модель:</span>
+                <span id="model-badge" class="text-emerald-300 font-medium">Procedural Tabby</span>
+            </div>
+
+            <button id="export-glb-btn" class="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 transition text-gray-950 font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Скачать petly_cat.glb</span>
+            </button>
+
+            <label for="glb-upload" class="w-full bg-white/5 hover:bg-white/10 border border-white/10 transition cursor-pointer px-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 text-gray-200">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                <span>Загрузить свой .GLB</span>
+                <input id="glb-upload" type="file" accept=".glb,.gltf" class="hidden">
+            </label>
+
+            <button id="code-modal-btn" class="w-full bg-white/5 hover:bg-white/10 border border-white/10 transition px-3.5 py-2 rounded-xl text-xs font-medium text-sky-300 flex items-center justify-center gap-1.5">
+                <span>Код для вставки на внешний сайт</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Bottom Bar: Animation Clips -->
+    <footer class="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 w-auto max-w-[95vw] pointer-events-auto">
+        <div class="glass-panel px-3 py-2 rounded-2xl flex items-center gap-1.5 overflow-x-auto shadow-2xl">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 px-2 hidden sm:inline">Анимации:</span>
+            <button data-clip="All_Idle" class="anim-btn active px-3.5 py-2 rounded-xl text-xs font-medium border border-transparent transition whitespace-nowrap">
+                ✨ Живой режим (Микс)
+            </button>
+            <button data-clip="Idle_Breathing" class="anim-btn px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition whitespace-nowrap">
+                🫁 Idle_Breathing
+            </button>
+            <button data-clip="Tail_Idle" class="anim-btn px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition whitespace-nowrap">
+                🐈 Tail_Idle
+            </button>
+            <button data-clip="Idle_LookAround" class="anim-btn px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition whitespace-nowrap">
+                👀 Idle_LookAround
+            </button>
+            <button data-clip="HeadTilt" class="anim-btn px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition whitespace-nowrap">
+                😺 HeadTilt
+            </button>
+            <button data-clip="Walk" class="anim-btn px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition whitespace-nowrap">
+                🐾 Walk (Ходьба)
+            </button>
+        </div>
+    </footer>
+
+    <!-- Drag & Drop Overlay -->
+    <div id="drop-zone" class="fixed inset-0 z-40 bg-amber-500/20 backdrop-blur-md border-4 border-dashed border-amber-400 hidden items-center justify-center pointer-events-none">
+        <div class="glass-panel px-8 py-6 rounded-3xl text-center">
+            <div class="text-4xl mb-2">📦</div>
+            <h3 class="text-lg font-bold text-white">Отпустите файл .GLB или .GLTF</h3>
+            <p class="text-sm text-gray-300">Модель мгновенно откроется в 3D-просмотрщике</p>
+        </div>
+    </div>
+
+    <!-- Modal: Website Integration & Restored Python Script -->
+    <div id="code-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-3xl rounded-2xl border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-base text-white">На чём ты остановился + Код для сайта</h3>
+                    <p class="text-xs text-gray-400">Шпаргалка по твоим файлам и встраиванию 3D-модели</p>
+                </div>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-white p-1.5 rounded-lg bg-white/5">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-5 text-xs leading-relaxed text-gray-300">
+                <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200">
+                    <h4 class="font-semibold text-sm mb-1 text-amber-300">📌 Что было в твоих файлах:</h4>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>В файле <code>build_cat.py</code> лежал крутой генератор кошки на чистом Python (SDF + Marching Cubes), который создаёт <code>petly_cat.glb</code> со скелетом (25 костей) и 5 анимациями.</li>
+                        <li>В самом конце файла <code>build_cat.py</code> (начиная со строки 340: <code>glTF...</code>) случайно приклеился бинарный код другой модели из Blender (на 34 279 вершин, показанной на твоём скриншоте <code>41ZtZ.jpg</code>). Из-за этого скрипт выдавал ошибку синтаксиса при запуске.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-semibold text-white text-sm">1. Быстрая вставка `.glb` кошки на любой сайт (`<model-viewer>`)</h4>
+                        <button id="copy-html-btn" class="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[11px] transition">Копировать HTML</button>
+                    </div>
+                    <pre id="snippet-html" class="p-3.5 rounded-xl bg-black/60 border border-white/10 font-mono text-[11px] overflow-x-auto text-emerald-300">&lt;!-- Подключаем компонент Google Model Viewer --&gt;
+&lt;script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"&gt;&lt;/script&gt;
+
+&lt;!-- 3D Кошка на сайте --&gt;
+&lt;model-viewer 
+    src="petly_cat.glb" 
+    alt="3D модель кошки Petly"
+    camera-controls 
+    auto-rotate 
+    autoplay 
+    animation-name="Idle_Breathing"
+    shadow-intensity="1" 
+    style="width: 100%; height: 500px; background-color: transparent;"&gt;
+&lt;/model-viewer&gt;</pre>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-white text-sm mb-1">2. Как получить файл `petly_cat.glb` прямо сейчас:</h4>
+                    <p class="text-gray-400">Просто нажми оранжевую кнопку <b>«Скачать petly_cat.glb»</b> в правом верхнем углу этого окна — браузер сам упакует текущую 3D-кошку в стандартный `.glb` файл!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. НАСТРОЙКА THREE.JS СЦЕНЫ И ОСВЕЩЕНИЯ
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121318);
+
+        const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.01, 50);
+        camera.position.set(0.55, 0.38, 0.72);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.20, 0.06);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 0.25;
+        controls.maxDistance = 3.5;
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
+        controls.update();
+
+        // Освещение студийного уровня
+        const hemiLight = new THREE.HemisphereLight(0xfff5e4, 0x222634, 0.85);
+        hemiLight.position.set(0, 2, 0);
+        scene.add(hemiLight);
+
+        const keyLight = new THREE.DirectionalLight(0xfffaf0, 1.35);
+        keyLight.position.set(1.2, 1.8, 1.4);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
+        keyLight.shadow.camera.near = 0.2;
+        keyLight.shadow.camera.far = 6;
+        const d = 0.65;
+        keyLight.shadow.camera.left = -d;
+        keyLight.shadow.camera.right = d;
+        keyLight.shadow.camera.top = d;
+        keyLight.shadow.camera.bottom = -d;
+        keyLight.shadow.bias = -0.0005;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.65);
+        rimLight.position.set(-1.3, 1.0, -1.2);
+        scene.add(rimLight);
+
+        // Мягкий подиум / тень на полу (Y = 0)
+        const floorGeo = new THREE.CircleGeometry(1.5, 64);
+        floorGeo.rotateX(-Math.PI / 2);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x181a20,
+            roughness: 0.85,
+            metalness: 0.1
+        });
+        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        floorMesh.receiveShadow = true;
+        scene.add(floorMesh);
+
+        const gridHelper = new THREE.GridHelper(1.6, 16, 0x374151, 0x1f2937);
+        gridHelper.position.y = 0.001;
+        scene.add(gridHelper);
+
+        // ==========================================
+        // 2. ПРОЦЕДУРНЫЙ ГЕНЕРАТОР КОШКИ (ИЗ BUILD_CAT.PY)
+        // ==========================================
+        const PALETTES = {
+            brown: {
+                light: [0.48, 0.39, 0.30],
+                dark:  [0.14, 0.11, 0.09],
+                belly: [0.64, 0.57, 0.48],
+                white: [0.93, 0.91, 0.88],
+                pink:  [0.68, 0.46, 0.44]
+            },
+            ginger: {
+                light: [0.76, 0.43, 0.20],
+                dark:  [0.42, 0.18, 0.06],
+                belly: [0.85, 0.65, 0.46],
+                white: [0.96, 0.94, 0.90],
+                pink:  [0.78, 0.52, 0.50]
+            },
+            silver: {
+                light: [0.58, 0.60, 0.63],
+                dark:  [0.16, 0.17, 0.19],
+                belly: [0.75, 0.77, 0.79],
+                white: [0.95, 0.96, 0.97],
+                pink:  [0.65, 0.45, 0.47]
+            }
+        };
+
+        let currentCoat = 'brown';
+        let catRoot = new THREE.Group();
+        scene.add(catRoot);
+
+        let bones = {};
+        let catMeshes = [];
+        let chestMesh = null;
+        let skeletonHelper = null;
+        let customMixer = null;
+
+        function sst(a, b, x) {
+            const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+            return t * t * (3 - 2 * t);
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        // Псевдо-шум из твоего build_cat.py для реалистичных полосок табби
+        function pseudoNoise(x, y, z, f) {
+            return (
+                Math.sin((x * 0.8 + y * 0.4 + z * 0.3) * f) +
+                Math.sin((x * -0.5 + y * 0.7 + z * 0.5) * f * 1.13 + 1.2) +
+                Math.sin((x * 0.3 - y * 0.6 + z * 0.7) * f * 1.27 + 2.5) +
+                Math.sin((x * 0.6 + y * 0.5 - z * 0.6) * f * 1.41 + 4.1)
+            ) * 0.25;
+        }
+
+        // Раскраска вершин по координатам мира точно по формулам build_cat.py
+        function applyTabbyVertexColors(geometry, worldMatrix, isEar = false) {
+            const pos = geometry.attributes.position;
+            const norm = geometry.attributes.normal;
+            const colors = new Float32Array(pos.count * 3);
+            const pal = PALETTES[currentCoat];
+            const vWorld = new THREE.Vector3();
+            const nWorld = new THREE.Vector3();
+
+            for (let i = 0; i < pos.count; i++) {
+                vWorld.fromBufferAttribute(pos, i).applyMatrix4(worldMatrix);
+                nWorld.fromBufferAttribute(norm, i);
+
+                const x = vWorld.x, y = vWorld.y, z = vWorld.z;
+                const ax = Math.abs(x);
+                const n1 = pseudoNoise(x, y, z, 55);
+                const n2 = pseudoNoise(x, y, z, 180);
+
+                // Полоски на теле (вертикальные тигровые)
+                const s_t = Math.sin(z * 2 * Math.PI / 0.032 + 2.2 * pseudoNoise(x, y, z, 14) + 8 * (y - 0.2));
+                const v_t = sst(0.15, 0.75, s_t) * (1 - 0.8 * sst(0.17, 0.12, y));
+
+                // Кольца на лапах
+                const s_l = Math.sin(y * 2 * Math.PI / 0.032 + 1.2 * pseudoNoise(x, y, z, 20));
+                const v_l = sst(-0.1, 0.45, s_l);
+                const m_leg = sst(0.16, 0.11, y) * sst(0.025, 0.042, ax);
+
+                // Кольца на хвосте
+                const tpar = Math.sqrt(Math.pow(z + 0.23, 2) + Math.pow(y - 0.22, 2));
+                let v_tail = sst(-0.1, 0.4, Math.sin(tpar * 2 * Math.PI / 0.042 + 0.8 * n1));
+                v_tail = Math.max(v_tail, sst(0.24, 0.29, tpar)); // тёмный кончик хвоста
+                const m_tail = sst(-0.22, -0.26, z);
+
+                // Узор на голове ("М" на лбу и полоски на щеках)
+                const s_h = Math.sin(x * 2 * Math.PI / 0.019 + 1.0 * n1);
+                let v_head = sst(0.0, 0.5, s_h) * sst(0.33, 0.36, y);
+                const m_head = sst(0.235, 0.275, z) * sst(0.235, 0.275, y);
+
+                let v = lerp(v_t, v_l, m_leg);
+                v = lerp(v, v_tail, m_tail);
+                v = lerp(v, v_head, m_head);
+
+                // Тёмная полоса вдоль позвоночника
+                const dors = sst(0.034, 0.010, ax) * sst(0.225, 0.255, y) * sst(0.30, 0.20, z) * sst(-0.28, -0.22, z);
+                v = Math.max(v, dors * (1 - m_head));
+
+                if (isEar) v = 0.72;
+
+                // Смешивание базового светлого и тёмного табби
+                const fNoise = 1 + 0.08 * n1 + 0.05 * n2;
+                let r = lerp(pal.light[0], pal.dark[0], v) * fNoise;
+                let g = lerp(pal.light[1], pal.dark[1], v) * fNoise;
+                let b = lerp(pal.light[2], pal.dark[2], v) * fNoise;
+
+                // Светлый животик
+                const bl = sst(0.15, 0.105, y) * (1 - m_leg * 0.5) * sst(0.27, 0.20, z);
+                r = lerp(r, pal.belly[0], 0.55 * bl);
+                g = lerp(g, pal.belly[1], 0.55 * bl);
+                b = lerp(b, pal.belly[2], 0.55 * bl);
+
+                // Белая грудка, подбородок и белые носочки на лапках
+                const w_chest = (1 - sst(0.028, 0.054, ax + 0.01 * n1)) * sst(0.265, 0.215, y) * sst(0.02, 0.08, z) * sst(0.30, 0.25, z) * sst(0.07, 0.14, y);
+                const w_chin = (1 - sst(0.022, 0.036, ax)) * sst(0.308, 0.290, y) * sst(0.325, 0.348, z);
+                const w_front = sst(0.040, 0.020, y + 0.005 * n1) * (z > 0.05 ? 1 : 0);
+                const w_hind = sst(0.040, 0.020, y + 0.005 * n1) * (z < -0.06 && z > -0.22 ? 1 : 0);
+                const w = Math.min(1, Math.max(w_chest, w_chin, w_front, w_hind)) * (isEar ? 0 : 1);
+
+                r = lerp(r, pal.white[0], w);
+                g = lerp(g, pal.white[1], w);
+                b = lerp(b, pal.white[2], w);
+
+                // Розовая внутренняя часть ушек
+                if (isEar && nWorld.z > 0.3 && y < 0.395) {
+                    const pFactor = sst(0.25, 0.65, nWorld.z) * 0.75;
+                    r = lerp(r, pal.pink[0], pFactor);
+                    g = lerp(g, pal.pink[1], pFactor);
+                    b = lerp(b, pal.pink[2], pFactor);
+                }
+
+                colors[i * 3]     = Math.min(1, Math.max(0, r));
+                colors[i * 3 + 1] = Math.min(1, Math.max(0, g));
+                colors[i * 3 + 2] = Math.min(1, Math.max(0, b));
+            }
+
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        }
+
+        // Создание эллипсоида с мировыми координатами для бесшовной раскраски
+        function createEllipsoidPart(radii, offset, parentBone, mat, isEar = false, flatFloor = false) {
+            const geo = new THREE.SphereGeometry(1, 36, 28);
+            const pos = geo.attributes.position;
+            const v = new THREE.Vector3();
+
+            parentBone.updateWorldMatrix(true, false);
+            const localMat = new THREE.Matrix4().makeTranslation(offset[0], offset[1], offset[2]);
+            const scaleMat = new THREE.Matrix4().makeScale(radii[0], radii[1], radii[2]);
+            localMat.multiply(scaleMat);
+
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i).applyMatrix4(localMat);
+                pos.setXYZ(i, v.x, v.y, v.z);
+            }
+            geo.computeVertexNormals();
+
+            const fullWorldMat = parentBone.matrixWorld.clone();
+            if (flatFloor) {
+                for (let i = 0; i < pos.count; i++) {
+                    v.fromBufferAttribute(pos, i).applyMatrix4(fullWorldMat);
+                    if (v.y < 0) {
+                        v.y = 0;
+                        v.applyMatrix4(fullWorldMat.clone().invert());
+                        pos.setXYZ(i, v.x, v.y, v.z);
+                    }
+                }
+            }
+
+            applyTabbyVertexColors(geo, fullWorldMat, isEar);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { isEar, worldMat: fullWorldMat.clone() };
+            parentBone.add(mesh);
+            catMeshes.push(mesh);
+            return mesh;
+        }
+
+        // Создание конусной капсулы (конечности, шея, уши, сегменты хвоста)
+        function createCapsulePart(aWorld, bWorld, r1, r2, parentBone, mat, isEar = false) {
+            parentBone.updateWorldMatrix(true, false);
+            const invParent = parentBone.matrixWorld.clone().invert();
+
+            const pA = new THREE.Vector3(...aWorld);
+            const pB = new THREE.Vector3(...bWorld);
+            const dir = new THREE.Vector3().subVectors(pB, pA);
+            const len = dir.length();
+            const mid = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+
+            // Геометрия капсулы со скруглёнными концами
+            const geo = new THREE.CylinderGeometry(r2, r1, len, 28, 12, false);
+            // Скругляем крышки цилиндра в полусферы
+            const pos = geo.attributes.position;
+            const v = new THREE.Vector3();
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i);
+                if (Math.abs(v.y - len / 2) < 0.0001) {
+                    const rad = Math.sqrt(v.x * v.x + v.z * v.z);
+                    if (rad < r2 * 0.99) v.y += Math.sqrt(Math.max(0, r2 * r2 - rad * rad)) * 0.65;
+                } else if (Math.abs(v.y + len / 2) < 0.0001) {
+                    const rad = Math.sqrt(v.x * v.x + v.z * v.z);
+                    if (rad < r1 * 0.99) v.y -= Math.sqrt(Math.max(0, r1 * r1 - rad * rad)) * 0.65;
+                }
+                if (isEar) {
+                    v.z *= 0.38; // уплощаем ушки как в build_cat.py (flat=3.0)
+                }
+                pos.setXYZ(i, v.x, v.y, v.z);
+            }
+
+            const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+            const worldMat = new THREE.Matrix4().compose(mid, quat, new THREE.Vector3(1, 1, 1));
+            const localTransform = invParent.multiply(worldMat);
+
+            geo.applyMatrix4(localTransform);
+            geo.computeVertexNormals();
+
+            applyTabbyVertexColors(geo, parentBone.matrixWorld, isEar);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { isEar, worldMat: parentBone.matrixWorld.clone() };
+            parentBone.add(mesh);
+            catMeshes.push(mesh);
+            return mesh;
+        }
+
+        // Создание детализированной радужки и кошачьего зрачка (из make_eye в build_cat.py)
+        function createCatEyeMesh() {
+            const geo = new THREE.SphereGeometry(0.0115, 40, 28);
+            const pos = geo.attributes.position;
+            const colors = new Float32Array(pos.count * 3);
+            const v = new THREE.Vector3();
+
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i).normalize();
+                const nx = v.x, ny = v.y, nz = v.z;
+                const R = Math.sqrt(nx * nx + ny * ny);
+                const ang = Math.atan2(ny, nx);
+
+                const inner = [0.95, 0.76, 0.16];
+                const outer = [0.34, 0.58, 0.14];
+                const dark  = [0.05, 0.06, 0.03];
+
+                const t = sst(0.15, 0.68, R);
+                const ray = 1 + 0.12 * Math.sin(ang * 23 + 3 * R) * sst(0.2, 0.5, R);
+                let r = lerp(inner[0], outer[0], t) * ray;
+                let g = lerp(inner[1], outer[1], t) * ray;
+                let b = lerp(inner[2], outer[2], t) * ray;
+
+                const limb = sst(0.60, 0.74, R);
+                r = lerp(r, dark[0], limb);
+                g = lerp(g, dark[1], limb);
+                b = lerp(b, dark[2], limb);
+
+                // Вертикальный кошачий зрачок
+                const pupDist = Math.pow(nx / 0.13, 2) + Math.pow(ny / 0.62, 2);
+                const pupSoft = sst(1.15, 0.82, pupDist);
+                r = lerp(r, 0.01, pupSoft);
+                g = lerp(g, 0.01, pupSoft);
+                b = lerp(b, 0.01, pupSoft);
+
+                if (nz < 0.15) {
+                    r = 0.08; g = 0.06; b = 0.05;
+                }
+
+                colors[i * 3]     = Math.min(1, Math.max(0, r));
+                colors[i * 3 + 1] = Math.min(1, Math.max(0, g));
+                colors[i * 3 + 2] = Math.min(1, Math.max(0, b));
+            }
+            geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            const eyeMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.05,
+                metalness: 0.05
+            });
+            return new THREE.Mesh(geo, eyeMat);
+        }
+
+        function buildProceduralCat() {
+            // Очищаем предыдущую модель
+            while (catRoot.children.length) catRoot.remove(catRoot.children[0]);
+            if (skeletonHelper) { scene.remove(skeletonHelper); skeletonHelper = null; }
+            bones = {};
+            catMeshes = [];
+            customMixer = null;
+
+            const furMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.88,
+                metalness: 0.02
+            });
+            const noseMat = new THREE.MeshStandardMaterial({ color: 0x9e5b58, roughness: 0.55 });
+            const padMat  = new THREE.MeshStandardMaterial({ color: 0x804d4d, roughness: 0.6 });
+            const whiskerMat = new THREE.MeshStandardMaterial({ color: 0xedeae4, roughness: 0.35 });
+
+            const TAIL_PTS = [
+                [0, 0.222, -0.230],
+                [0, 0.212, -0.300],
+                [0, 0.218, -0.370],
+                [0, 0.243, -0.435],
+                [0, 0.292, -0.481],
+                [0, 0.342, -0.506]
+            ];
+
+            // Точная иерархия костей из твоего build_cat.py
+            const boneDefs = [
+                ["Root", null, [0, 0, 0]],
+                ["Pelvis", "Root", [0, 0.20, -0.14]],
+                ["Spine1", "Pelvis", [0, 0.20, -0.07]],
+                ["Spine2", "Spine1", [0, 0.20, 0.01]],
+                ["Chest", "Spine2", [0, 0.20, 0.09]],
+                ["Neck", "Chest", [0, 0.245, 0.19]],
+                ["Head", "Neck", [0, 0.29, 0.27]],
+                ["Ear_L", "Head", [0.033, 0.356, 0.288]],
+                ["Ear_R", "Head", [-0.033, 0.356, 0.288]]
+            ];
+            for (let i = 0; i < 5; i++) {
+                boneDefs.push([`Tail${i + 1}`, i === 0 ? "Pelvis" : `Tail${i}`, TAIL_PTS[i]]);
+            }
+            for (const [s, S] of [[1, "L"], [-1, "R"]]) {
+                boneDefs.push([`FrontUpper_${S}`, "Chest", [s * 0.047, 0.200, 0.120]]);
+                boneDefs.push([`FrontLower_${S}`, `FrontUpper_${S}`, [s * 0.047, 0.100, 0.120]]);
+                boneDefs.push([`FrontPaw_${S}`, `FrontLower_${S}`, [s * 0.047, 0.035, 0.135]]);
+                boneDefs.push([`HindUpper_${S}`, "Pelvis", [s * 0.055, 0.220, -0.130]]);
+                boneDefs.push([`HindLower_${S}`, `HindUpper_${S}`, [s * 0.062, 0.140, -0.080]]);
+                boneDefs.push([`HindHock_${S}`, `HindLower_${S}`, [s * 0.052, 0.075, -0.195]]);
+                boneDefs.push([`HindPaw_${S}`, `HindHock_${S}`, [s * 0.050, 0.022, -0.155]]);
+            }
+
+            const worldPosMap = {};
+            boneDefs.forEach(([name, parent, wPos]) => {
+                const b = new THREE.Bone();
+                b.name = name;
+                worldPosMap[name] = wPos;
+                if (parent) {
+                    const pPos = worldPosMap[parent];
+                    b.position.set(wPos[0] - pPos[0], wPos[1] - pPos[1], wPos[2] - pPos[2]);
+                    bones[parent].add(b);
+                } else {
+                    b.position.set(wPos[0], wPos[1], wPos[2]);
+                    catRoot.add(b);
+                }
+                bones[name] = b;
+            });
+
+            catRoot.updateMatrixWorld(true);
+
+            // 1. Торс и шея
+            chestMesh = createEllipsoidPart([0.074, 0.092, 0.115], [0, 0.0, 0.035], bones["Chest"], furMat);
+            createEllipsoidPart([0.069, 0.085, 0.108], [0, -0.008, -0.03], bones["Spine2"], furMat);
+            createEllipsoidPart([0.070, 0.088, 0.105], [0, 0.005, -0.005], bones["Pelvis"], furMat);
+            createCapsulePart([0, 0.24, 0.18], [0, 0.295, 0.265], 0.052, 0.044, bones["Neck"], furMat);
+
+            // 2. Голова, мордочка, щёчки, ушки
+            createEllipsoidPart([0.054, 0.049, 0.057], [0, 0.037, 0.042], bones["Head"], furMat);
+            createEllipsoidPart([0.029, 0.024, 0.030], [0, 0.018, 0.092], bones["Head"], furMat);
+            createEllipsoidPart([0.021, 0.013, 0.028], [0, -0.003, 0.075], bones["Head"], furMat);
+
+            for (const [s, S] of [[1, "L"], [-1, "R"]]) {
+                createEllipsoidPart([0.022, 0.020, 0.026], [s * 0.036, 0.020, 0.066], bones["Head"], furMat);
+                createEllipsoidPart([0.016, 0.008, 0.018], [s * 0.027, 0.056, 0.075], bones["Head"], furMat);
+                createCapsulePart(
+                    [s * 0.033, 0.354, 0.288],
+                    [s * 0.051, 0.402, 0.286],
+                    0.026, 0.005, bones[`Ear_${S}`], furMat, true
+                );
+            }
+
+            // 3. Передние и задние лапы + розовые подушечки
+            for (const [s, S] of [[1, "L"], [-1, "R"]]) {
+                // Передняя лапа
+                createEllipsoidPart([0.032, 0.052, 0.062], [s * 0.046, -0.005, 0.025], bones["Chest"], furMat);
+                createCapsulePart([s * 0.047, 0.200, 0.120], [s * 0.047, 0.100, 0.120], 0.033, 0.024, bones[`FrontUpper_${S}`], furMat);
+                createCapsulePart([s * 0.047, 0.100, 0.120], [s * 0.047, 0.035, 0.135], 0.023, 0.018, bones[`FrontLower_${S}`], furMat);
+                createEllipsoidPart([0.018, 0.017, 0.029], [0, -0.018, 0.008], bones[`FrontPaw_${S}`], furMat, false, true);
+
+                const fPad = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), padMat);
+                fPad.scale.set(0.010, 0.0055, 0.0115);
+                fPad.position.set(0, -0.028, 0.005);
+                bones[`FrontPaw_${S}`].add(fPad);
+
+                // Задняя лапа
+                createEllipsoidPart([0.040, 0.072, 0.080], [s * 0.046, -0.020, 0.025], bones["Pelvis"], furMat);
+                createCapsulePart([s * 0.055, 0.220, -0.130], [s * 0.062, 0.140, -0.080], 0.044, 0.030, bones[`HindUpper_${S}`], furMat);
+                createCapsulePart([s * 0.062, 0.140, -0.080], [s * 0.052, 0.075, -0.195], 0.031, 0.020, bones[`HindLower_${S}`], furMat);
+                createCapsulePart([s * 0.052, 0.075, -0.195], [s * 0.050, 0.022, -0.155], 0.020, 0.017, bones[`HindHock_${S}`], furMat);
+                createEllipsoidPart([0.018, 0.017, 0.031], [0, -0.005, 0.025], bones[`HindPaw_${S}`], furMat, false, true);
+
+                const hPad = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), padMat);
+                hPad.scale.set(0.010, 0.0055, 0.0125);
+                hPad.position.set(0, -0.015, 0.023);
+                bones[`HindPaw_${S}`].add(hPad);
+            }
+
+            // 4. Сегменты хвоста
+            const tr = [0.0225, 0.0205, 0.0185, 0.0165, 0.0145, 0.0115];
+            for (let i = 0; i < 5; i++) {
+                createCapsulePart(TAIL_PTS[i], TAIL_PTS[i + 1], tr[i], tr[i + 1], bones[`Tail${i + 1}`], furMat);
+            }
+
+            // 5. Розовый носик, глаза и вибриссы (усы)
+            const noseMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), noseMat);
+            noseMesh.scale.set(0.0078, 0.0054, 0.0048);
+            noseMesh.position.set(0, 0.0235, 0.1235);
+            bones["Head"].add(noseMesh);
+
+            for (const [s, S, yaw] of [[1, "L", 0.22], [-1, "R", -0.22]]) {
+                const eye = createCatEyeMesh();
+                eye.name = `Eye_${S}`;
+                eye.position.set(s * 0.0275, 0.0435, 0.0925);
+                eye.rotation.y = yaw;
+                bones["Head"].add(eye);
+                bones[`Eye_${S}`] = eye;
+
+                // Вибриссы (усы на щёчках и бровях)
+                const whiskerRows = [
+                    [0.0145, 0.113, 0.04],
+                    [0.0195, 0.114, 0.015],
+                    [0.0235, 0.114, -0.01],
+                    [0.0275, 0.112, -0.035]
+                ];
+                whiskerRows.forEach(([ry, rz, dy], row) => {
+                    const curve = new THREE.QuadraticBezierCurve3(
+                        new THREE.Vector3(s * 0.016, ry, rz),
+                        new THREE.Vector3(s * 0.045, ry + dy * 0.6 - 0.004, rz + 0.015),
+                        new THREE.Vector3(s * 0.074, ry + dy - 0.016, rz + (0.025 - row * 0.005))
+                    );
+                    const wGeo = new THREE.TubeGeometry(curve, 8, 0.00028, 5, false);
+                    const wMesh = new THREE.Mesh(wGeo, whiskerMat);
+                    bones["Head"].add(wMesh);
+                });
+            }
+
+            // Скелет-помощник для визуализации
+            skeletonHelper = new THREE.SkeletonHelper(bones["Root"]);
+            skeletonHelper.visible = document.getElementById('skeleton-toggle').checked;
+            scene.add(skeletonHelper);
+        }
+
+        buildProceduralCat();
+
+        // ==========================================
+        // 3. ПРОЦЕДУРНЫЕ АНИМАЦИИ (ТОЧНО ИЗ BUILD_CAT.PY)
+        // ==========================================
+        let activeClip = 'All_Idle';
+        let clock = new THREE.Clock();
+        let mouseTarget = { x: 0, y: 0 };
+
+        const WALK_PH = { HindUpper_L: 0.0, FrontUpper_L: 0.25, HindUpper_R: 0.5, FrontUpper_R: 0.75 };
+
+        function legCycle(u, A, liftAmp, stance = 0.62) {
+            u = ((u % 1.0) + 1.0) % 1.0;
+            if (u < stance) {
+                const k = u / stance;
+                return [-A + 2 * A * k, 0.0];
+            }
+            const k = (u - stance) / (1 - stance);
+            const e = k * k * (3 - 2 * k);
+            return [A - 2 * A * e, Math.sin(Math.PI * k) * liftAmp];
+        }
+
+        function keysCurve(keys, t) {
+            if (t <= keys[0][0]) return keys[0][1];
+            for (let i = 0; i < keys.length - 1; i++) {
+                const [t0, v0] = keys[i];
+                const [t1, v1] = keys[i + 1];
+                if (t >= t0 && t <= t1) {
+                    const u = t1 > t0 ? (t - t0) / (t1 - t0) : 1;
+                    return v0 + (v1 - v0) * (u * u * (3 - 2 * u));
+                }
+            }
+            return keys[keys.length - 1][1];
+        }
+
+        function resetBonesRotation() {
+            Object.values(bones).forEach(b => {
+                if (b.isBone) b.rotation.set(0, 0, 0);
+            });
+            if (bones["Root"]) bones["Root"].position.set(0, 0, 0);
+            if (bones["Eye_L"]) bones["Eye_L"].rotation.set(0, 0.22, 0);
+            if (bones["Eye_R"]) bones["Eye_R"].rotation.set(0, -0.22, 0);
+        }
+
+        function updateProceduralAnimations(elapsed, delta) {
+            if (customMixer) {
+                customMixer.update(delta);
+                return;
+            }
+            if (!bones["Root"]) return;
+
+            resetBonesRotation();
+
+            // 1. Idle_Breathing
+            if (activeClip === 'Idle_Breathing' || activeClip === 'All_Idle') {
+                const D = 4.0;
+                const w = 2 * Math.PI * (elapsed % D) / D;
+                const s = Math.sin(w);
+                bones["Spine1"].rotation.x += 0.008 * s;
+                bones["Spine2"].rotation.x += 0.012 * s;
+                bones["Chest"].rotation.x  += 0.016 * s;
+                bones["Neck"].rotation.x   -= 0.020 * s;
+                bones["Head"].rotation.x   -= 0.010 * s;
+
+                // Морф дыхания (расширение грудной клетки)
+                const breathWeight = 0.5 - 0.5 * Math.cos(w);
+                if (chestMesh && document.getElementById('breathe-val').textContent === 'Авто') {
+                    chestMesh.scale.set(1 + 0.045 * breathWeight, 1 + 0.03 * breathWeight, 1 + 0.02 * breathWeight);
+                    document.getElementById('breathe-slider').value = breathWeight.toFixed(2);
+                }
+            }
+
+            // 2. Tail_Idle
+            if (activeClip === 'Tail_Idle' || activeClip === 'All_Idle') {
+                const D = 4.0;
+                const w = 2 * Math.PI * (elapsed % D) / D;
+                const A = [0.07, 0.13, 0.19, 0.24, 0.30];
+                const B = [0.02, 0.04, 0.07, 0.09, 0.11];
+                for (let i = 0; i < 5; i++) {
+                    bones[`Tail${i + 1}`].rotation.x += B[i] * Math.sin(2 * w - 0.6 * i);
+                    bones[`Tail${i + 1}`].rotation.y += A[i] * Math.sin(w - 0.75 * i);
+                }
+            }
+
+            // 3. Idle_LookAround
+            if (activeClip === 'Idle_LookAround' || activeClip === 'All_Idle') {
+                const t = elapsed % 8.0;
+                const yawKeys = [[0, 0], [0.7, 0], [1.8, 0.45], [3.2, 0.45], [4.2, -0.05], [5.2, -0.50], [6.4, -0.50], [7.4, 0], [8, 0]];
+                const pitKeys = [[0, 0], [1.8, -0.08], [3.2, 0.04], [5.2, 0.06], [6.4, -0.05], [8, 0]];
+                const earLKeys = [[0, 0], [2.4, 0], [2.55, -0.40], [2.8, 0], [3.0, -0.25], [3.25, 0], [8, 0]];
+                const earRKeys = [[0, 0], [5.6, 0], [5.75, -0.45], [6.0, 0], [8, 0]];
+
+                const y = keysCurve(yawKeys, t);
+                const p = keysCurve(pitKeys, t);
+                bones["Neck"].rotation.x += p * 0.4;
+                bones["Neck"].rotation.y += y * 0.35;
+                bones["Head"].rotation.x += p * 0.6;
+                bones["Head"].rotation.y += y * 0.65;
+                bones["Ear_L"].rotation.x += keysCurve(earLKeys, t);
+                bones["Ear_R"].rotation.x += keysCurve(earRKeys, t);
+                bones["Spine2"].rotation.y += y * 0.08;
+                bones["Chest"].rotation.y  += y * 0.10;
+            }
+
+            // 4. HeadTilt (милый наклон головы)
+            if (activeClip === 'HeadTilt') {
+                const t = elapsed % 2.6;
+                const rollKeys = [[0, 0], [0.5, 0.38], [1.7, 0.38], [2.4, 0], [2.6, 0]];
+                const pitKeys  = [[0, 0], [0.5, -0.1], [1.7, -0.1], [2.4, 0], [2.6, 0]];
+                const earKeys  = [[0, 0], [0.5, -0.12], [1.7, -0.12], [2.4, 0], [2.6, 0]];
+                const r = keysCurve(rollKeys, t);
+                const p = keysCurve(pitKeys, t);
+                bones["Neck"].rotation.set(p * 0.3, 0, r * 0.25);
+                bones["Head"].rotation.set(p * 0.7, 0, r * 0.75);
+                bones["Ear_L"].rotation.set(keysCurve(earKeys, t), 0, -r * 0.25);
+                bones["Ear_R"].rotation.set(keysCurve(earKeys, t), 0, -r * 0.25);
+            }
+
+            // 5. Walk (полноценный цикл четвероногой походки)
+            if (activeClip === 'Walk') {
+                const D = 1.2;
+                const t = elapsed % D;
+                const u = t / D;
+                const w = 2 * Math.PI * t / D;
+
+                for (const S of ["L", "R"]) {
+                    let ph = WALK_PH[`FrontUpper_${S}`];
+                    let [a, lf] = legCycle(u - ph, 0.27, 0.9);
+                    bones[`FrontUpper_${S}`].rotation.x = a;
+                    bones[`FrontLower_${S}`].rotation.x = lf * 0.85 + 0.06;
+                    bones[`FrontPaw_${S}`].rotation.x   = -lf * 0.55 - a * 0.35;
+
+                    ph = WALK_PH[`HindUpper_${S}`];
+                    [a, lf] = legCycle(u - ph, 0.26, 0.8);
+                    bones[`HindUpper_${S}`].rotation.x = a;
+                    bones[`HindLower_${S}`].rotation.x = -lf * 0.55 + a * 0.20;
+                    bones[`HindHock_${S}`].rotation.x  = lf * 0.75 - a * 0.15;
+                    bones[`HindPaw_${S}`].rotation.x   = -lf * 0.55 - 0.05;
+                }
+
+                const sw = Math.sin(w);
+                bones["Pelvis"].rotation.y = -0.035 * sw;
+                bones["Spine1"].rotation.y = 0.02 * sw;
+                bones["Spine2"].rotation.y = 0.035 * sw;
+                bones["Chest"].rotation.y  = 0.04 * sw;
+                bones["Neck"].rotation.y   = -0.03 * sw;
+                bones["Head"].rotation.y   = -0.02 * sw;
+
+                for (let i = 0; i < 5; i++) {
+                    bones[`Tail${i + 1}`].rotation.set(0.04 + 0.01 * i, 0.07 * Math.sin(w - 0.8 * i), 0);
+                }
+                bones["Root"].position.y = 0.004 * Math.sin(2 * w + 0.6);
+            }
+
+            // Слежение головой и глазами за курсором мыши
+            if (document.getElementById('track-mouse-toggle').checked) {
+                bones["Head"].rotation.y += mouseTarget.x * 0.35;
+                bones["Head"].rotation.x += mouseTarget.y * 0.25;
+                bones["Neck"].rotation.y += mouseTarget.x * 0.15;
+            }
+        }
+
+        // ==========================================
+        // 4. UI ВЗАИМОДЕЙСТВИЯ, ЗАГРУЗКА И ЭКСПОРТ .GLB
+        // ==========================================
+        window.addEventListener('mousemove', (e) => {
+            const nx = (e.clientX / window.innerWidth) * 2 - 1;
+            const ny = (e.clientY / window.innerHeight) * 2 - 1;
+            mouseTarget.x = nx;
+            mouseTarget.y = ny;
+        });
+
+        // Переключение анимаций
+        document.querySelectorAll('.anim-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.anim-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeClip = btn.dataset.clip;
+            });
+        });
+
+        // Переключение окраса шерсти
+        document.querySelectorAll('.coat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const selectedCoat = btn.dataset.coat;
+                document.querySelectorAll('.coat-btn').forEach(b => {
+                    if (b.dataset.coat === selectedCoat) {
+                        b.className = 'coat-btn active px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 border border-amber-500/50 text-amber-200 transition';
+                    } else {
+                        b.className = 'coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition';
+                    }
+                });
+                currentCoat = selectedCoat;
+                buildProceduralCat();
+            });
+        });
+
+        // Открытие и закрытие панели «Настройки 3D»
+        const settingsDrawer = document.getElementById('settings-drawer');
+        function toggleSettingsDrawer(forceClose = false) {
+            const isHidden = settingsDrawer.classList.contains('translate-x-[120%]');
+            if (isHidden && !forceClose) {
+                settingsDrawer.classList.remove('translate-x-[120%]', 'opacity-0');
+                settingsDrawer.classList.add('translate-x-0', 'opacity-100');
+            } else {
+                settingsDrawer.classList.add('translate-x-[120%]', 'opacity-0');
+                settingsDrawer.classList.remove('translate-x-0', 'opacity-100');
+            }
+        }
+        document.getElementById('toggle-settings-btn').addEventListener('click', () => toggleSettingsDrawer());
+        document.getElementById('close-settings-btn').addEventListener('click', () => toggleSettingsDrawer(true));
+
+        // Логика ухода за питомцем (показатели, реакции 3D-кошки и всплывающие эмодзи)
+        const petStats = {
+            hunger: 82,
+            happy: 90,
+            energy: 75,
+            groom: 88
+        };
+
+        function updatePetStatsUI() {
+            document.getElementById('stat-hunger-text').textContent = `${petStats.hunger}%`;
+            document.getElementById('stat-hunger-bar').style.width = `${petStats.hunger}%`;
+
+            document.getElementById('stat-happy-text').textContent = `${petStats.happy}%`;
+            document.getElementById('stat-happy-bar').style.width = `${petStats.happy}%`;
+
+            document.getElementById('stat-energy-text').textContent = `${petStats.energy}%`;
+            document.getElementById('stat-energy-bar').style.width = `${petStats.energy}%`;
+
+            document.getElementById('stat-groom-text').textContent = `${petStats.groom}%`;
+            document.getElementById('stat-groom-bar').style.width = `${petStats.groom}%`;
+
+            // Счётчик выполненных задач
+            const tasks = document.querySelectorAll('.care-task');
+            let done = 0;
+            tasks.forEach(t => {
+                const span = t.nextElementSibling;
+                if (t.checked) {
+                    done++;
+                    span.classList.add('line-through', 'opacity-60');
+                } else {
+                    span.classList.remove('line-through', 'opacity-60');
+                }
+            });
+            document.getElementById('tasks-counter').textContent = `${done}/${tasks.length}`;
+        }
+
+        document.querySelectorAll('.care-task').forEach(cb => {
+            cb.addEventListener('change', updatePetStatsUI);
+        });
+
+        function spawnFloatingEmoji(emoji) {
+            const el = document.createElement('div');
+            el.className = 'floating-emoji text-3xl';
+            el.textContent = emoji;
+            el.style.left = `${window.innerWidth / 2 + (Math.random() * 80 - 40)}px`;
+            el.style.top = `${window.innerHeight / 2 - 40}px`;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1200);
+        }
+
+        function setAnimationClip(clipName, moodText) {
+            activeClip = clipName;
+            document.querySelectorAll('.anim-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.clip === clipName);
+            });
+            if (moodText) {
+                document.getElementById('pet-mood-badge').textContent = moodText;
+            }
+        }
+
+        // Кнопки ухода в нижней панели
+        document.getElementById('care-feed-btn').addEventListener('click', () => {
+            petStats.hunger = Math.min(100, petStats.hunger + 15);
+            petStats.happy = Math.min(100, petStats.happy + 5);
+            updatePetStatsUI();
+            spawnFloatingEmoji('🍖');
+            setAnimationClip('HeadTilt', '😋 Вкусно кушает!');
+            setTimeout(() => setAnimationClip('All_Idle', '😺 Сыт и доволен'), 3000);
+        });
+
+        document.getElementById('care-pet-btn').addEventListener('click', () => {
+            petStats.happy = Math.min(100, petStats.happy + 10);
+            updatePetStatsUI();
+            spawnFloatingEmoji('❤️');
+            setAnimationClip('HeadTilt', '😻 Мурчит от ласки');
+            setTimeout(() => setAnimationClip('All_Idle', '😺 Счастлив и мурчит'), 3000);
+        });
+
+        document.getElementById('care-brush-btn').addEventListener('click', () => {
+            petStats.groom = Math.min(100, petStats.groom + 12);
+            petStats.happy = Math.min(100, petStats.happy + 4);
+            document.getElementById('task-brush').checked = true;
+            updatePetStatsUI();
+            spawnFloatingEmoji('✨');
+            setAnimationClip('Tail_Idle', '✨ Шерсть блестит!');
+            setTimeout(() => setAnimationClip('All_Idle', '😺 Ухоженный котик'), 3000);
+        });
+
+        document.getElementById('care-play-btn').addEventListener('click', () => {
+            petStats.happy = Math.min(100, petStats.happy + 12);
+            petStats.energy = Math.max(20, petStats.energy - 10);
+            document.getElementById('task-play').checked = true;
+            updatePetStatsUI();
+            spawnFloatingEmoji('🧶');
+            setAnimationClip('Walk', '🐾 Активная прогулка!');
+            setTimeout(() => setAnimationClip('All_Idle', '😺 Нагулялся и рад'), 4500);
+        });
+
+        document.getElementById('care-sleep-btn').addEventListener('click', () => {
+            petStats.energy = Math.min(100, petStats.energy + 20);
+            updatePetStatsUI();
+            spawnFloatingEmoji('💤');
+            setAnimationClip('Idle_Breathing', '💤 Спокойно отдыхает');
+        });
+
+        // Слайдер дыхания
+        document.getElementById('breathe-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('breathe-val').textContent = Math.round(val * 100) + '%';
+            if (chestMesh) {
+                chestMesh.scale.set(1 + 0.06 * val, 1 + 0.04 * val, 1 + 0.025 * val);
+            }
+        });
+
+        // Переключатели скелета, сетки и прозрачного фона
+        document.getElementById('skeleton-toggle').addEventListener('change', (e) => {
+            if (skeletonHelper) skeletonHelper.visible = e.target.checked;
+        });
+
+        document.getElementById('wireframe-toggle').addEventListener('change', (e) => {
+            catRoot.traverse(obj => {
+                if (obj.isMesh && obj.material) {
+                    obj.material.wireframe = e.target.checked;
+                }
+            });
+        });
+
+        document.getElementById('bg-toggle').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                scene.background = null;
+                floorMesh.visible = false;
+                gridHelper.visible = false;
+            } else {
+                scene.background = new THREE.Color(0x121318);
+                floorMesh.visible = true;
+                gridHelper.visible = true;
+            }
+        });
+
+        document.getElementById('reset-cam-btn').addEventListener('click', () => {
+            camera.position.set(0.55, 0.38, 0.72);
+            controls.target.set(0, 0.20, 0.06);
+            controls.update();
+        });
+
+        // Экспорт 3D модели в настоящий бинарный файл petly_cat.glb
+        document.getElementById('export-glb-btn').addEventListener('click', () => {
+            const btn = document.getElementById('export-glb-btn');
+            const oldHtml = btn.innerHTML;
+            btn.textContent = 'Упаковка GLB...';
+
+            const exporter = new THREE.GLTFExporter();
+            exporter.parse(
+                catRoot,
+                (result) => {
+                    const blob = new Blob([result], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'petly_cat.glb';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    btn.innerHTML = oldHtml;
+                },
+                { binary: true }
+            );
+        });
+
+        // Загрузка внешнего .GLB / .GLTF файла
+        function loadExternalGLB(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const loader = new THREE.GLTFLoader();
+                loader.parse(e.target.result, '', (gltf) => {
+                    while (catRoot.children.length) catRoot.remove(catRoot.children[0]);
+                    if (skeletonHelper) { scene.remove(skeletonHelper); skeletonHelper = null; }
+
+                    const model = gltf.scene;
+                    // Нормализация размера и центрирование на полу Y = 0
+                    const box = new THREE.Box3().setFromObject(model);
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 2.5 || maxDim < 0.1) {
+                        const scale = 0.65 / maxDim;
+                        model.scale.setScalar(scale);
+                    }
+                    const box2 = new THREE.Box3().setFromObject(model);
+                    model.position.y -= box2.min.y;
+
+                    model.traverse(child => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
+                    catRoot.add(model);
+                    document.getElementById('model-badge').textContent = file.name;
+
+                    if (gltf.animations && gltf.animations.length > 0) {
+                        customMixer = new THREE.AnimationMixer(model);
+                        gltf.animations.forEach(clip => customMixer.clipAction(clip).play());
+                    } else {
+                        customMixer = null;
+                    }
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        document.getElementById('glb-upload').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) loadExternalGLB(e.target.files[0]);
+        });
+
+        // Drag & Drop поддержка
+        const dropZone = document.getElementById('drop-zone');
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('hidden');
+            dropZone.classList.add('flex');
+        });
+        window.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget === null) {
+                dropZone.classList.add('hidden');
+                dropZone.classList.remove('flex');
+            }
+        });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('hidden');
+            dropZone.classList.remove('flex');
+            if (e.dataTransfer.files.length > 0) {
+                loadExternalGLB(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Модальное окно с кодом для сайта
+        const codeModal = document.getElementById('code-modal');
+        document.getElementById('code-modal-btn').addEventListener('click', () => {
+            codeModal.classList.remove('hidden');
+            codeModal.classList.add('flex');
+        });
+        document.getElementById('close-modal-btn').addEventListener('click', () => {
+            codeModal.classList.add('hidden');
+            codeModal.classList.remove('flex');
+        });
+
+        document.getElementById('copy-html-btn').addEventListener('click', () => {
+            const text = document.getElementById('snippet-html').textContent;
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            const btn = document.getElementById('copy-html-btn');
+            btn.textContent = 'Скопировано! ✓';
+            setTimeout(() => btn.textContent = 'Копировать HTML', 2000);
+        });
+
+        // Ресайз окна
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Главный цикл рендеринга
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            updateProceduralAnimations(elapsed, delta);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            animate();
+        };
+    </script>
+</body>
+</html>
