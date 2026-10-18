@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petly Care — Твой пушистый рыжий котик</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js & GLTF Loader / Exporter -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background: #1b1d24;
+            color: #f3f4f6;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        .glass-panel {
+            background: rgba(22, 24, 30, 0.84);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .anim-btn.active {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            border-color: #fbbf24;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35);
+        }
+        .care-action-btn:active {
+            transform: scale(0.95);
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(0.8); }
+            100% { opacity: 0; transform: translateY(-45px) scale(1.25); }
+        }
+        .floating-emoji {
+            position: fixed;
+            pointer-events: none;
+            z-index: 50;
+            animation: floatUp 1.2s ease-out forwards;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+    </style>
+</head>
+<body class="relative select-none">
+
+    <div id="canvas-container"></div>
+
+    <header class="fixed top-3 left-3 right-3 z-30 flex items-center justify-between gap-2 pointer-events-none">
+        <div class="glass-panel px-3 py-2 rounded-2xl flex items-center gap-2.5 pointer-events-auto shadow-xl min-w-0">
+            <div class="w-9 h-9 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-gradient-to-br from-amber-500/30 to-orange-600/20 border border-amber-500/40 flex items-center justify-center text-lg sm:text-2xl shadow-inner">
+                🐱
+            </div>
+            <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <h1 class="font-bold text-sm sm:text-base tracking-tight text-white truncate">Petly Care</h1>
+                    <span id="pet-mood-badge" class="text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                        🐾 Счастлив и мурчит
+                    </span>
+                </div>
+                <p class="text-[11px] text-gray-400 truncate">
+                    <b class="text-amber-300">Барсик</b> <span class="hidden sm:inline">• Пушистый рыжий табби</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 pointer-events-auto shrink-0">
+            <button id="toggle-stats-btn" class="glass-panel hover:bg-white/10 transition px-3 py-2 rounded-xl text-xs font-medium text-amber-300 flex items-center gap-1.5 shadow-lg border border-amber-500/30">
+                <span>📊</span>
+                <span class="hidden sm:inline">Показатели</span>
+                <svg id="stats-chevron" class="w-3.5 h-3.5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+
+            <button id="toggle-settings-btn" class="glass-panel hover:bg-white/10 transition px-3 py-2 rounded-xl text-xs font-medium text-gray-200 flex items-center gap-1.5 shadow-lg border border-white/15" title="Настройки 3D и экспорт">
+                <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span class="hidden md:inline">Студия 3D</span>
+            </button>
+        </div>
+    </header>
+
+    <aside id="vitals-panel" class="fixed top-16 sm:top-20 left-3 z-20 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] space-y-2.5 pointer-events-auto transition-all duration-300 origin-top-left">
+        <div class="glass-panel p-3.5 sm:p-4 rounded-2xl shadow-2xl">
+            <div class="flex items-center justify-between mb-2.5">
+                <h2 class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Показатели питомца</h2>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] text-emerald-400 font-medium">Здоровье 98%</span>
+                    <button id="collapse-vitals-inner" class="text-gray-400 hover:text-white text-xs px-1.5 py-0.5 rounded bg-white/5 sm:hidden" title="Свернуть">✕</button>
+                </div>
+            </div>
+
+            <div class="space-y-2.5 text-xs">
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">🍗 Сытость</span>
+                        <span id="stat-hunger-text" class="font-semibold text-amber-400">82%</span>
+                    </div>
+                    <div class="w-full h-1.5 sm:h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-hunger-bar" class="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-500" style="width: 82%"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">💛 Настроение и ласка</span>
+                        <span id="stat-happy-text" class="font-semibold text-rose-400">90%</span>
+                    </div>
+                    <div class="w-full h-1.5 sm:h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-happy-bar" class="h-full bg-gradient-to-r from-rose-500 to-pink-400 rounded-full transition-all duration-500" style="width: 90%"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">⚡ Энергия и тонус</span>
+                        <span id="stat-energy-text" class="font-semibold text-sky-400">75%</span>
+                    </div>
+                    <div class="w-full h-1.5 sm:h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-energy-bar" class="h-full bg-gradient-to-r from-sky-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 75%"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-300 flex items-center gap-1.5">✨ Уход за шерстью</span>
+                        <span id="stat-groom-text" class="font-semibold text-emerald-400">88%</span>
+                    </div>
+                    <div class="w-full h-1.5 sm:h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div id="stat-groom-bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 88%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel p-3.5 sm:p-4 rounded-2xl shadow-2xl hidden md:block">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Дневник ухода на сегодня</h2>
+                <span id="tasks-counter" class="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-gray-300">2/4</span>
+            </div>
+            <div class="space-y-1.5 text-xs">
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input type="checkbox" checked class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-300 line-through opacity-60">Утреннее кормление</span>
+                </label>
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input type="checkbox" checked class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-300 line-through opacity-60">Свежая питьевая вода</span>
+                </label>
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input id="task-brush" type="checkbox" class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-200">Вычесать пушистую шерсть</span>
+                </label>
+                <label class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer transition">
+                    <input id="task-play" type="checkbox" class="care-task accent-amber-500 rounded cursor-pointer">
+                    <span class="text-gray-200">Активная игра с котиком</span>
+                </label>
+            </div>
+        </div>
+    </aside>
+
+    <footer class="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 w-auto max-w-[96vw] pointer-events-auto">
+        <div class="glass-panel px-2.5 py-2 rounded-2xl flex items-center gap-1.5 sm:gap-2 overflow-x-auto shadow-2xl border border-white/15">
+            <button id="care-feed-btn" class="care-action-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 flex items-center gap-1.5 transition whitespace-nowrap">
+                <span class="text-sm sm:text-base">🍗</span> <span>Покормить</span>
+            </button>
+            <button id="care-pet-btn" class="care-action-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 flex items-center gap-1.5 transition whitespace-nowrap">
+                <span class="text-sm sm:text-base">🤚</span> <span>Погладить</span>
+            </button>
+            <button id="care-brush-btn" class="care-action-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 flex items-center gap-1.5 transition whitespace-nowrap">
+                <span class="text-sm sm:text-base">🪮</span> <span>Вычесать</span>
+            </button>
+            <button id="care-play-btn" class="care-action-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-200 flex items-center gap-1.5 transition whitespace-nowrap">
+                <span class="text-sm sm:text-base">🧶</span> <span>Поиграть</span>
+            </button>
+            <button id="care-sleep-btn" class="care-action-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-200 flex items-center gap-1.5 transition whitespace-nowrap">
+                <span class="text-sm sm:text-base">💤</span> <span>Отдых</span>
+            </button>
+        </div>
+    </footer>
+
+    <aside id="settings-drawer" class="fixed top-16 sm:top-20 right-3 bottom-20 z-40 w-80 max-w-[calc(100vw-1.5rem)] glass-panel p-4 sm:p-5 rounded-2xl shadow-2xl pointer-events-auto overflow-y-auto transition-all duration-300 translate-x-[120%] opacity-0">
+        <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+            <div>
+                <h2 class="text-sm font-bold text-white">Студия 3D-модели</h2>
+                <p class="text-[11px] text-gray-400">Анимации, окрас и экспорт</p>
+            </div>
+            <button id="close-settings-btn" class="text-gray-400 hover:text-white p-1.5 rounded-lg bg-white/5">✕</button>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-300 mb-1.5 font-medium">Окрас шерсти</label>
+            <div class="grid grid-cols-3 gap-1.5">
+                <button data-coat="ginger" class="coat-btn active px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 border border-amber-500/50 text-amber-200 transition">
+                    Рыжий Табби
+                </button>
+                <button data-coat="brown" class="coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+                    Лесной
+                </button>
+                <button data-coat="silver" class="coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+                    Серебристый
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-4 pt-3 border-t border-white/10">
+            <label class="block text-xs text-gray-300 mb-1.5 font-medium">Тест анимаций</label>
+            <div class="grid grid-cols-2 gap-1.5">
+                <button data-clip="All_Idle" class="anim-btn active col-span-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-transparent transition">
+                    ✨ Живой режим (Микс)
+                </button>
+                <button data-clip="Idle_Breathing" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    🫁 Дыхание
+                </button>
+                <button data-clip="Tail_Idle" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    🐈 Хвост
+                </button>
+                <button data-clip="Idle_LookAround" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    👀 Осмотр
+                </button>
+                <button data-clip="HeadTilt" class="anim-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    😺 Наклон головы
+                </button>
+                <button data-clip="Walk" class="anim-btn col-span-2 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition">
+                    🐾 Walk (Ходьба)
+                </button>
+            </div>
+        </div>
+
+        <div class="space-y-3 text-xs pt-3 border-t border-white/10">
+            <div>
+                <div class="flex justify-between text-gray-300 mb-1">
+                    <span>Пышность слоя шерсти</span>
+                    <span id="fur-val" class="text-amber-400 font-mono">100%</span>
+                </div>
+                <input id="fur-slider" type="range" min="0" max="1.6" step="0.05" value="1.0" class="w-full accent-amber-500 cursor-pointer">
+            </div>
+
+            <div>
+                <div class="flex justify-between text-gray-300 mb-1">
+                    <span>Дыхание груди</span>
+                    <span id="breathe-val" class="text-amber-400 font-mono">Авто</span>
+                </div>
+                <input id="breathe-slider" type="range" min="0" max="1" step="0.01" value="0.5" class="w-full accent-amber-500 cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Поворот головы за курсором</span>
+                <input id="track-mouse-toggle" type="checkbox" checked class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Показать скелет</span>
+                <input id="skeleton-toggle" type="checkbox" class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300">Сетка каркаса (Wireframe)</span>
+                <input id="wireframe-toggle" type="checkbox" class="accent-amber-500 rounded cursor-pointer">
+            </div>
+
+            <div class="pt-1">
+                <button id="reset-cam-btn" class="w-full py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-amber-400 text-xs font-medium transition">
+                    Сбросить ракурс камеры
+                </button>
+            </div>
+        </div>
+
+        <div class="space-y-2 pt-4 mt-4 border-t border-white/10">
+            <button id="export-glb-btn" class="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 transition text-gray-950 font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Скачать petly_cat.glb</span>
+            </button>
+        </div>
+    </aside>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1b1d24);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.01, 50);
+        const isMobileInit = window.innerWidth < 640;
+        camera.position.set(isMobileInit ? 0.60 : 0.45, isMobileInit ? 0.35 : 0.30, isMobileInit ? 0.85 : 0.65);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.21, 0.05);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 0.24;
+        controls.maxDistance = 3.0;
+        controls.maxPolarAngle = Math.PI / 2 + 0.04;
+        controls.update();
+
+        const hemiLight = new THREE.HemisphereLight(0xfff8ee, 0x222630, 1.05);
+        hemiLight.position.set(0, 2, 0);
+        scene.add(hemiLight);
+
+        const keyLight = new THREE.DirectionalLight(0xfffbf4, 1.35);
+        keyLight.position.set(1.2, 2.0, 1.6);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
+        keyLight.shadow.camera.near = 0.2;
+        keyLight.shadow.camera.far = 6;
+        const d = 0.65;
+        keyLight.shadow.camera.left = -d;
+        keyLight.shadow.camera.right = d;
+        keyLight.shadow.camera.top = d;
+        keyLight.shadow.camera.bottom = -d;
+        keyLight.shadow.bias = -0.0012;
+        keyLight.shadow.normalBias = 0.008;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffedd5, 0.7);
+        rimLight.position.set(-1.3, 1.2, -1.2);
+        scene.add(rimLight);
+
+        const podiumGeo = new THREE.CylinderGeometry(0.40, 0.42, 0.032, 64);
+        podiumGeo.translate(0, -0.016, -0.02);
+        const podiumMat = new THREE.MeshStandardMaterial({ color: 0x7c818c, roughness: 0.6, metalness: 0.08 });
+        const floorMesh = new THREE.Mesh(podiumGeo, podiumMat);
+        floorMesh.receiveShadow = true;
+        scene.add(floorMesh);
+
+        const PALETTES = {
+            ginger: {
+                light: [0.95, 0.56, 0.20],
+                dark:  [0.66, 0.27, 0.06],
+                belly: [0.98, 0.86, 0.70],
+                white: [0.99, 0.99, 0.98],
+                pink:  [0.90, 0.58, 0.58]
+            },
+            brown: {
+                light: [0.56, 0.45, 0.34],
+                dark:  [0.18, 0.14, 0.11],
+                belly: [0.74, 0.66, 0.56],
+                white: [0.96, 0.95, 0.93],
+                pink:  [0.78, 0.52, 0.50]
+            },
+            silver: {
+                light: [0.68, 0.70, 0.74],
+                dark:  [0.20, 0.22, 0.25],
+                belly: [0.83, 0.85, 0.88],
+                white: [0.98, 0.98, 0.99],
+                pink:  [0.75, 0.52, 0.54]
+            }
+        };
+
+        let currentCoat = 'ginger';
+        let furThicknessMultiplier = 1.0;
+        let catRoot = new THREE.Group();
+        scene.add(catRoot);
+
+        let bones = {};
+        let catMeshes = [];
+        let chestMesh = null;
+        let skeletonHelper = null;
+
+        function createDetailedFurTextures() {
+            const bumpCanvas = document.createElement('canvas');
+            bumpCanvas.width = 512;
+            bumpCanvas.height = 512;
+            const bctx = bumpCanvas.getContext('2d');
+            bctx.fillStyle = '#808080';
+            bctx.fillRect(0, 0, 512, 512);
+
+            for (let i = 0; i < 45000; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                const len = 5 + Math.random() * 10;
+                const bright = Math.floor(85 + Math.random() * 155);
+                bctx.strokeStyle = `rgba(${bright},${bright},${bright},0.42)`;
+                bctx.lineWidth = 0.7 + Math.random() * 0.7;
+                bctx.beginPath();
+                bctx.moveTo(x, y);
+                bctx.lineTo(x + (Math.random() - 0.5) * 2.5, y + len);
+                bctx.stroke();
+            }
+            const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+            bumpTex.wrapS = THREE.RepeatWrapping;
+            bumpTex.wrapT = THREE.RepeatWrapping;
+            bumpTex.repeat.set(6, 6);
+
+            const shellCanvas = document.createElement('canvas');
+            shellCanvas.width = 512;
+            shellCanvas.height = 512;
+            const sctx = shellCanvas.getContext('2d');
+            sctx.fillStyle = '#000000';
+            sctx.fillRect(0, 0, 512, 512);
+
+            for (let i = 0; i < 68000; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                const h = Math.pow(Math.random(), 0.55);
+                const val = Math.floor(45 + h * 210);
+                const r = 0.7 + (1.0 - h * 0.5) * 1.1;
+
+                sctx.fillStyle = `rgb(${val},${val},${val})`;
+                sctx.beginPath();
+                sctx.ellipse(x, y, r * 0.75, r * 1.45, (Math.random() - 0.5) * 0.25, 0, Math.PI * 2);
+                sctx.fill();
+            }
+            const shellAlphaTex = new THREE.CanvasTexture(shellCanvas);
+            shellAlphaTex.wrapS = THREE.RepeatWrapping;
+            shellAlphaTex.wrapT = THREE.RepeatWrapping;
+            shellAlphaTex.repeat.set(9, 9);
+
+            return { bumpTex, shellAlphaTex };
+        }
+        const { bumpTex: detailedFurBump, shellAlphaTex: furShellAlphaMap } = createDetailedFurTextures();
+
+        function sst(a, b, x) {
+            const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+            return t * t * (3 - 2 * t);
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function smin(a, b, k) {
+            const h = Math.max(k - Math.abs(a - b), 0.0) / k;
+            return Math.min(a, b) - h * h * k * 0.25;
+        }
+
+        function smax(a, b, k) {
+            return -smin(-a, -b, k);
+        }
+
+        function sdSphere(px, py, pz, cx, cy, cz, r) {
+            const dx = px - cx, dy = py - cy, dz = pz - cz;
+            return Math.sqrt(dx * dx + dy * dy + dz * dz) - r;
+        }
+
+        function sdEllipsoid(px, py, pz, cx, cy, cz, rx, ry, rz) {
+            const x = (px - cx) / rx;
+            const y = (py - cy) / ry;
+            const z = (pz - cz) / rz;
+            const k0 = Math.sqrt(x * x + y * y + z * z);
+            if (k0 < 1e-6) return -Math.min(rx, ry, rz);
+            const k1 = Math.sqrt((x / rx) * (x / rx) + (y / ry) * (y / ry) + (z / rz) * (z / rz));
+            return k0 * (k0 - 1.0) / k1;
+        }
+
+        function sdCapsule(px, py, pz, ax, ay, az, bx, by, bz, r1, r2) {
+            const pax = px - ax, pay = py - ay, paz = pz - az;
+            const bax = bx - ax, bay = by - ay, baz = bz - az;
+            const baba = bax * bax + bay * bay + baz * baz;
+            let h = (pax * bax + pay * bay + paz * baz) / baba;
+            h = Math.max(0.0, Math.min(1.0, h));
+            const dx = pax - bax * h, dy = pay - bay * h, dz = paz - baz * h;
+            return Math.sqrt(dx * dx + dy * dy + dz * dz) - (r1 + (r2 - r1) * h);
+        }
+
+        function pseudoNoise(x, y, z, f) {
+            return (
+                Math.sin((x * 0.9 + y * 0.5 + z * 0.3) * f) +
+                Math.sin((x * -0.6 + y * 0.8 + z * 0.4) * f * 1.15 + 1.1) +
+                Math.sin((x * 0.4 - y * 0.7 + z * 0.8) * f * 1.3 + 2.3)
+            ) * 0.33;
+        }
+
+        const TAIL_PTS = [
+            [0, 0.215, -0.205],
+            [0, 0.248, -0.270],
+            [0, 0.302, -0.318],
+            [0, 0.368, -0.344],
+            [0, 0.432, -0.354],
+            [0, 0.488, -0.344]
+        ];
+        const TAIL_R = [0.032, 0.036, 0.039, 0.038, 0.034, 0.024];
+
+        function evalCatSDF(px, py, pz) {
+            const ax = Math.abs(px);
+
+            // Sleek feline torso
+            let d = sdCapsule(px, py, pz, 0, 0.202, 0.145, 0, 0.200, -0.135, 0.062, 0.071);
+            d = smin(d, sdEllipsoid(px, py, pz, 0, 0.196, 0.155, 0.060, 0.077, 0.074), 0.055);
+            d = smin(d, sdEllipsoid(px, py, pz, 0, 0.184, 0.000, 0.067, 0.080, 0.115), 0.065);
+            d = smin(d, sdCapsule(px, py, pz, 0, 0.220, 0.158, 0, 0.285, 0.248, 0.053, 0.046), 0.048);
+
+            // Head & expressive feline face proportions matching the user's cat photos
+            let dHead = sdEllipsoid(px, py, pz, 0, 0.320, 0.288, 0.058, 0.049, 0.054);
+            // Fluffy cheek ruffs
+            dHead = smin(dHead, sdEllipsoid(ax, py, pz, 0.032, 0.302, 0.286, 0.038, 0.029, 0.038), 0.030);
+            // Expressive brow ridges above the wider-set eyes
+            dHead = smin(dHead, sdEllipsoid(ax, py, pz, 0.0255, 0.333, 0.326, 0.019, 0.0085, 0.017), 0.012);
+            // Defined nose bridge (переносица) running down between the eyes to the nose tip
+            dHead = smin(dHead, sdCapsule(px, py, pz, 0, 0.325, 0.324, 0, 0.310, 0.347, 0.0125, 0.010), 0.012);
+            // Whisker pads (подушечки усов) & chin
+            dHead = smin(dHead, sdEllipsoid(ax, py, pz, 0.0135, 0.299, 0.335, 0.016, 0.0135, 0.018), 0.014);
+            dHead = smin(dHead, sdEllipsoid(px, py, pz, 0, 0.288, 0.329, 0.014, 0.0095, 0.015), 0.012);
+
+            // Ears
+            let dEar = sdCapsule(ax, py, pz, 0.034, 0.352, 0.278, 0.051, 0.403, 0.278, 0.021, 0.004);
+            dHead = smin(dHead, dEar, 0.018);
+
+            // Wider-set, deeper eye sockets so eyes sit naturally inside the skull under the brows
+            const dEyeSocket = sdEllipsoid(ax, py, pz, 0.0255, 0.320, 0.329, 0.0145, 0.0125, 0.0145);
+            dHead = smax(dHead, -dEyeSocket, 0.007);
+
+            d = smin(d, dHead, 0.042);
+
+            // Slender Front Legs
+            let dFront = sdCapsule(ax, py, pz, 0.035, 0.195, 0.122, 0.034, 0.095, 0.125, 0.029, 0.021);
+            dFront = smin(dFront, sdCapsule(ax, py, pz, 0.034, 0.095, 0.125, 0.033, 0.024, 0.136, 0.020, 0.018), 0.018);
+            dFront = smin(dFront, sdEllipsoid(ax, py, pz, 0.033, 0.014, 0.146, 0.021, 0.014, 0.025), 0.015);
+            d = smin(d, dFront, 0.035);
+
+            // Graceful Hind Legs
+            let dHind = sdCapsule(ax, py, pz, 0.042, 0.200, -0.125, 0.044, 0.132, -0.088, 0.038, 0.028);
+            dHind = smin(dHind, sdCapsule(ax, py, pz, 0.044, 0.132, -0.088, 0.040, 0.070, -0.178, 0.026, 0.019), 0.020);
+            dHind = smin(dHind, sdCapsule(ax, py, pz, 0.040, 0.070, -0.178, 0.038, 0.020, -0.148, 0.019, 0.017), 0.016);
+            dHind = smin(dHind, sdEllipsoid(ax, py, pz, 0.038, 0.014, -0.130, 0.021, 0.014, 0.025), 0.015);
+            d = smin(d, dHind, 0.038);
+
+            // Plush Tail
+            let dTail = 1e9;
+            for (let i = 0; i < 5; i++) {
+                const a = TAIL_PTS[i], b = TAIL_PTS[i + 1];
+                const seg = sdCapsule(px, py, pz, a[0], a[1], a[2], b[0], b[1], b[2], TAIL_R[i], TAIL_R[i + 1]);
+                dTail = i === 0 ? seg : smin(dTail, seg, 0.035);
+            }
+            d = smin(d, dTail, 0.042);
+
+            if (py < 0.0) {
+                d = Math.max(d, -py);
+            }
+
+            return d;
+        }
+
+        function evalSDFGradient(px, py, pz) {
+            const eps = 0.0025;
+            const gx = evalCatSDF(px + eps, py, pz) - evalCatSDF(px - eps, py, pz);
+            const gy = evalCatSDF(px, py + eps, pz) - evalCatSDF(px, py - eps, pz);
+            const gz = evalCatSDF(px, py, pz + eps) - evalCatSDF(px, py, pz - eps);
+            return [gx, gy, gz];
+        }
+
+        function generateUnifiedSmoothCatGeometry() {
+            const minX = -0.13, maxX = 0.13;
+            const minY = -0.01, maxY = 0.54;
+            const minZ = -0.42, maxZ = 0.38;
+            const nx = 54, ny = 88, nz = 124;
+            const dx = (maxX - minX) / nx;
+            const dy = (maxY - minY) / ny;
+            const dz = (maxZ - minZ) / nz;
+
+            const nxp = nx + 1, nyp = ny + 1, nzp = nz + 1;
+            const grid = new Float32Array(nxp * nyp * nzp);
+            const idx = (ix, iy, iz) => (ix * nyp + iy) * nzp + iz;
+
+            for (let ix = 0; ix <= nx; ix++) {
+                const x = minX + ix * dx;
+                for (let iy = 0; iy <= ny; iy++) {
+                    const y = minY + iy * dy;
+                    for (let iz = 0; iz <= nz; iz++) {
+                        const z = minZ + iz * dz;
+                        grid[idx(ix, iy, iz)] = evalCatSDF(x, y, z);
+                    }
+                }
+            }
+
+            const vertMap = new Int32Array(nx * ny * nz).fill(-1);
+            const cellIdx = (ix, iy, iz) => (ix * ny + iy) * nz + iz;
+            const positions = [];
+
+            const edges = [
+                [0,0,0, 1,0,0], [0,1,0, 1,1,0], [0,0,1, 1,0,1], [0,1,1, 1,1,1],
+                [0,0,0, 0,1,0], [1,0,0, 1,1,0], [0,0,1, 0,1,1], [1,0,1, 1,1,1],
+                [0,0,0, 0,0,1], [1,0,0, 1,0,1], [0,1,0, 0,1,1], [1,1,0, 1,1,1]
+            ];
+
+            for (let ix = 0; ix < nx; ix++) {
+                for (let iy = 0; iy < ny; iy++) {
+                    for (let iz = 0; iz < nz; iz++) {
+                        let mask = 0;
+                        for (let cx = 0; cx < 2; cx++) {
+                            for (let cy = 0; cy < 2; cy++) {
+                                for (let cz = 0; cz < 2; cz++) {
+                                    if (grid[idx(ix + cx, iy + cy, iz + cz)] < 0) {
+                                        mask |= (1 << (cx * 4 + cy * 2 + cz));
+                                    }
+                                }
+                            }
+                        }
+                        if (mask === 0 || mask === 255) continue;
+
+                        let sx = 0, sy = 0, sz = 0, count = 0;
+                        for (let e = 0; e < 12; e++) {
+                            const [ax, ay, az, bx, by, bz] = edges[e];
+                            const va = grid[idx(ix + ax, iy + ay, iz + az)];
+                            const vb = grid[idx(ix + bx, iy + by, iz + bz)];
+                            if ((va < 0) !== (vb < 0)) {
+                                const t = va / (va - vb);
+                                sx += minX + (ix + ax + t * (bx - ax)) * dx;
+                                sy += minY + (iy + ay + t * (by - ay)) * dy;
+                                sz += minZ + (iz + az + t * (bz - az)) * dz;
+                                count++;
+                            }
+                        }
+                        if (count > 0) {
+                            vertMap[cellIdx(ix, iy, iz)] = positions.length / 3;
+                            positions.push(sx / count, sy / count, sz / count);
+                        }
+                    }
+                }
+            }
+
+            const indices = [];
+            function pushQuad(c0, c1, c2, c3) {
+                if (c0 < 0 || c1 < 0 || c2 < 0 || c3 < 0) return;
+                indices.push(c0, c1, c2, c0, c2, c3);
+            }
+
+            for (let ix = 1; ix < nx; ix++) {
+                for (let iy = 1; iy < ny; iy++) {
+                    for (let iz = 1; iz < nz; iz++) {
+                        const v0 = grid[idx(ix, iy, iz)];
+                        const vx = grid[idx(ix + 1, iy, iz)];
+                        if ((v0 < 0) !== (vx < 0)) {
+                            pushQuad(
+                                vertMap[cellIdx(ix, iy - 1, iz - 1)],
+                                vertMap[cellIdx(ix, iy, iz - 1)],
+                                vertMap[cellIdx(ix, iy, iz)],
+                                vertMap[cellIdx(ix, iy - 1, iz)]
+                            );
+                        }
+                        const vy = grid[idx(ix, iy + 1, iz)];
+                        if ((v0 < 0) !== (vy < 0)) {
+                            pushQuad(
+                                vertMap[cellIdx(ix - 1, iy, iz - 1)],
+                                vertMap[cellIdx(ix - 1, iy, iz)],
+                                vertMap[cellIdx(ix, iy, iz)],
+                                vertMap[cellIdx(ix, iy, iz - 1)]
+                            );
+                        }
+                        const vz = grid[idx(ix, iy, iz + 1)];
+                        if ((v0 < 0) !== (vz < 0)) {
+                            pushQuad(
+                                vertMap[cellIdx(ix - 1, iy - 1, iz)],
+                                vertMap[cellIdx(ix, iy - 1, iz)],
+                                vertMap[cellIdx(ix, iy, iz)],
+                                vertMap[cellIdx(ix - 1, iy, iz)]
+                            );
+                        }
+                    }
+                }
+            }
+
+            const vCount = positions.length / 3;
+            const adj = Array.from({ length: vCount }, () => []);
+            for (let i = 0; i < indices.length; i += 3) {
+                const a = indices[i], b = indices[i + 1], c = indices[i + 2];
+                adj[a].push(b, c);
+                adj[b].push(a, c);
+                adj[c].push(a, b);
+            }
+
+            // Taubin smoothing for silky organic transitions
+            let currPos = new Float32Array(positions);
+            let nextPos = new Float32Array(positions.length);
+            const lambdas = [0.55, -0.52, 0.55, -0.52, 0.50, -0.48];
+            for (const lam of lambdas) {
+                for (let v = 0; v < vCount; v++) {
+                    const nbs = adj[v];
+                    if (nbs.length === 0 || currPos[v * 3 + 1] < 0.004) {
+                        nextPos[v * 3] = currPos[v * 3];
+                        nextPos[v * 3 + 1] = currPos[v * 3 + 1];
+                        nextPos[v * 3 + 2] = currPos[v * 3 + 2];
+                        continue;
+                    }
+                    let ax = 0, ay = 0, az = 0;
+                    for (let k = 0; k < nbs.length; k++) {
+                        const nb = nbs[k] * 3;
+                        ax += currPos[nb];
+                        ay += currPos[nb + 1];
+                        az += currPos[nb + 2];
+                    }
+                    ax /= nbs.length; ay /= nbs.length; az /= nbs.length;
+                    nextPos[v * 3]     = currPos[v * 3]     + lam * (ax - currPos[v * 3]);
+                    nextPos[v * 3 + 1] = currPos[v * 3 + 1] + lam * (ay - currPos[v * 3 + 1]);
+                    nextPos[v * 3 + 2] = currPos[v * 3 + 2] + lam * (az - currPos[v * 3 + 2]);
+                }
+                currPos.set(nextPos);
+            }
+
+            // Post-smoothing exact 3D SDF gradient orientation check for EVERY triangle (eliminates any flipped diamonds on back)
+            for (let i = 0; i < indices.length; i += 3) {
+                const a = indices[i], b = indices[i + 1], c = indices[i + 2];
+                const x0 = currPos[a * 3], y0 = currPos[a * 3 + 1], z0 = currPos[a * 3 + 2];
+                const x1 = currPos[b * 3], y1 = currPos[b * 3 + 1], z1 = currPos[b * 3 + 2];
+                const x2 = currPos[c * 3], y2 = currPos[c * 3 + 1], z2 = currPos[c * 3 + 2];
+
+                const ux = x1 - x0, uy = y1 - y0, uz = z1 - z0;
+                const vx = x2 - x0, vy = y2 - y0, vz = z2 - z0;
+                const fnx = uy * vz - uz * vy;
+                const fny = uz * vx - ux * vz;
+                const fnz = ux * vy - uy * vx;
+
+                const mx = (x0 + x1 + x2) / 3;
+                const my = (y0 + y1 + y2) / 3;
+                const mz = (z0 + z1 + z2) / 3;
+                const [gx, gy, gz] = evalSDFGradient(mx, my, mz);
+
+                if (fnx * gx + fny * gy + fnz * gz < 0) {
+                    indices[i + 1] = c;
+                    indices[i + 2] = b;
+                }
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(currPos, 3));
+            geo.setIndex(indices);
+            geo.computeVertexNormals();
+            return geo;
+        }
+
+        function getAnatomicalFurLength(x, y, z) {
+            const ax = Math.abs(x);
+            // Keep fur very short on the nose tip, nose bridge, and right around the eyes so the 3D nose and eyes stay super crisp
+            const dNoseTip = Math.sqrt(x * x + Math.pow(y - 0.308, 2) + Math.pow(z - 0.348, 2));
+            const noseMask = sst(0.015, 0.042, dNoseTip);
+
+            const dEyeSocket = Math.sqrt(Math.pow(ax - 0.0255, 2) + Math.pow(y - 0.320, 2) + Math.pow(z - 0.329, 2));
+            const eyeMask = sst(0.013, 0.028, dEyeSocket);
+
+            const pawShorten = sst(0.015, 0.055, y);
+
+            // Extra fluffy chest ruff (манишка), cheek ruffs, belly, and tail
+            const isChestRuff = sst(0.08, 0.27, y) * sst(0.04, 0.16, z) * (1.0 - sst(0.27, 0.31, y));
+            const isCheekRuff = sst(0.27, 0.31, y) * sst(0.25, 0.30, z) * sst(0.026, 0.055, ax);
+            const isBellyFluff = sst(0.21, 0.12, y) * sst(-0.14, 0.12, z) * (1.0 - sst(0.10, 0.04, y));
+            const isTailFluff = sst(-0.18, -0.25, z);
+
+            let baseLen = 0.0068;
+            baseLen += 0.0055 * isChestRuff;
+            baseLen += 0.0048 * isCheekRuff;
+            baseLen += 0.0040 * isBellyFluff;
+            baseLen += 0.0055 * isTailFluff;
+
+            return baseLen * (0.05 + 0.95 * noseMask) * (0.12 + 0.88 * eyeMask) * (0.25 + 0.75 * pawShorten);
+        }
+
+        function colorAndSkinUnifiedCat(geometry, boneList) {
+            const pos = geometry.attributes.position;
+            const colors = new Float32Array(pos.count * 3);
+            const uvs = new Float32Array(pos.count * 2);
+            const furLengths = new Float32Array(pos.count);
+            const skinIndices = new Uint16Array(pos.count * 4);
+            const skinWeights = new Float32Array(pos.count * 4);
+            const pal = PALETTES[currentCoat];
+
+            const bIdx = {};
+            boneList.forEach((b, idx) => { bIdx[b.name] = idx; });
+
+            const segBones = [
+                { idx: bIdx["Pelvis"], a: [0, 0.20, -0.17], b: [0, 0.20, -0.09], sigma: 0.080 },
+                { idx: bIdx["Spine1"], a: [0, 0.20, -0.09], b: [0, 0.20, -0.01], sigma: 0.080 },
+                { idx: bIdx["Spine2"], a: [0, 0.20, -0.01], b: [0, 0.20, 0.07],  sigma: 0.080 },
+                { idx: bIdx["Chest"],  a: [0, 0.20, 0.07],  b: [0, 0.22, 0.16],  sigma: 0.085 },
+                { idx: bIdx["Neck"],   a: [0, 0.22, 0.16],  b: [0, 0.28, 0.245], sigma: 0.060 },
+                { idx: bIdx["Head"],   a: [0, 0.285, 0.25], b: [0, 0.35, 0.34],  sigma: 0.070 },
+                { idx: bIdx["Ear_L"],  a: [0.034, 0.352, 0.278], b: [0.051, 0.403, 0.278], sigma: 0.025 },
+                { idx: bIdx["Ear_R"],  a: [-0.034, 0.352, 0.278], b: [-0.051, 0.403, 0.278], sigma: 0.025 }
+            ];
+            for (let i = 0; i < 5; i++) {
+                segBones.push({ idx: bIdx[`Tail${i + 1}`], a: TAIL_PTS[i], b: TAIL_PTS[i + 1], sigma: 0.060 });
+            }
+            for (const [s, S] of [[1, "L"], [-1, "R"]]) {
+                segBones.push({ idx: bIdx[`FrontUpper_${S}`], a: [s * 0.035, 0.195, 0.122], b: [s * 0.034, 0.095, 0.125], sigma: 0.040 });
+                segBones.push({ idx: bIdx[`FrontLower_${S}`], a: [s * 0.034, 0.095, 0.125], b: [s * 0.033, 0.024, 0.136], sigma: 0.034 });
+                segBones.push({ idx: bIdx[`FrontPaw_${S}`],   a: [s * 0.033, 0.024, 0.136], b: [s * 0.033, 0.012, 0.152], sigma: 0.032 });
+                segBones.push({ idx: bIdx[`HindUpper_${S}`],  a: [s * 0.042, 0.200, -0.125], b: [s * 0.044, 0.132, -0.088], sigma: 0.046 });
+                segBones.push({ idx: bIdx[`HindLower_${S}`],  a: [s * 0.044, 0.132, -0.088], b: [s * 0.040, 0.070, -0.178], sigma: 0.038 });
+                segBones.push({ idx: bIdx[`HindHock_${S}`],   a: [s * 0.040, 0.070, -0.178], b: [s * 0.038, 0.020, -0.148], sigma: 0.034 });
+                segBones.push({ idx: bIdx[`HindPaw_${S}`],    a: [s * 0.038, 0.020, -0.148], b: [s * 0.038, 0.012, -0.122], sigma: 0.032 });
+            }
+
+            function distToSegSq(px, py, pz, a, b) {
+                const bax = b[0] - a[0], bay = b[1] - a[1], baz = b[2] - a[2];
+                const pax = px - a[0], pay = py - a[1], paz = pz - a[2];
+                const l2 = bax * bax + bay * bay + baz * baz;
+                let t = l2 > 1e-8 ? (pax * bax + pay * bay + paz * baz) / l2 : 0;
+                t = Math.max(0, Math.min(1, t));
+                const dx = pax - t * bax, dy = pay - t * bay, dz = paz - t * baz;
+                return dx * dx + dy * dy + dz * dz;
+            }
+
+            for (let i = 0; i < pos.count; i++) {
+                let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+                const ax = Math.abs(x);
+
+                const theta = Math.atan2(x, y - 0.18);
+                uvs[i * 2]     = z * 3.2 + x * 1.4;
+                uvs[i * 2 + 1] = y * 3.2 + theta * 0.35;
+
+                furLengths[i] = getAnatomicalFurLength(x, y, z);
+
+                const s_t = Math.sin(z * 2 * Math.PI / 0.034 + 1.8 * pseudoNoise(x, y, z, 14) + 5.2 * (y - 0.2));
+                const v_t = sst(0.08, 0.72, s_t) * (1 - 0.65 * sst(0.15, 0.09, y));
+
+                const s_l = Math.sin(y * 2 * Math.PI / 0.026 + 1.1 * pseudoNoise(x, y, z, 18));
+                const v_l = sst(-0.02, 0.52, s_l);
+                const m_leg = sst(0.15, 0.10, y) * sst(0.018, 0.032, ax);
+
+                const tpar = Math.sqrt(Math.pow(z + 0.21, 2) + Math.pow(y - 0.21, 2));
+                const v_tail = sst(-0.08, 0.45, Math.sin(tpar * 2 * Math.PI / 0.044 + 0.7 * pseudoNoise(x,y,z,42))) * 0.75;
+                const m_tail = sst(-0.19, -0.23, z);
+                const whiteTailTip = sst(0.21, 0.27, tpar) * m_tail;
+
+                // Forehead "M" tabby stripes & cheek lines matching IMG_20261018_231648.jpg
+                const s_h = Math.sin(ax * 2 * Math.PI / 0.012 + 0.4 * pseudoNoise(x,y,z,42)) + 0.45 * Math.sin((y - 0.31) * 120);
+                const v_head = sst(0.02, 0.52, s_h) * sst(0.285, 0.325, y);
+                const m_head = sst(0.22, 0.26, z) * sst(0.22, 0.26, y);
+
+                let v = lerp(v_t, v_l, m_leg);
+                v = lerp(v, v_tail, m_tail);
+                v = lerp(v, v_head, m_head);
+
+                const strandShade = 1.0 + 0.06 * pseudoNoise(x, y, z, 80);
+                let r = lerp(pal.light[0], pal.dark[0], v) * strandShade;
+                let g = lerp(pal.light[1], pal.dark[1], v) * strandShade;
+                let b = lerp(pal.light[2], pal.dark[2], v) * strandShade;
+
+                const bl = sst(0.16, 0.09, y) * (1 - m_leg * 0.4) * sst(0.24, 0.16, z);
+                r = lerp(r, pal.belly[0], 0.72 * bl);
+                g = lerp(g, pal.belly[1], 0.72 * bl);
+                b = lerp(b, pal.belly[2], 0.72 * bl);
+
+                // White chest bib (манишка), white whisker pads & chin (leaving the upper nose bridge warm ginger like the user's cat!)
+                const chestWidth = lerp(0.025, 0.058, sst(0.10, 0.24, y));
+                const w_chest = (1 - sst(chestWidth - 0.012, chestWidth + 0.012, ax))
+                              * sst(0.295, 0.24, y)
+                              * sst(0.05, 0.12, y)
+                              * sst(0.03, 0.11, z);
+
+                // White muzzle pads & chin below the ginger nose bridge (y < 0.308)
+                const w_muzzle = (1 - sst(0.021, 0.036, ax))
+                               * sst(0.311, 0.295, y)
+                               * sst(0.295, 0.324, z);
+
+                const w_front = sst(0.050, 0.024, y) * (z > 0.04 ? 1 : 0);
+                const w_hind  = sst(0.065, 0.030, y) * (z < -0.04 && z > -0.22 ? 1 : 0);
+                const isInnerEar = sst(0.348, 0.365, y) * sst(0.270, 0.286, z) * sst(0.024, 0.045, ax);
+                const isEar = y > 0.348 && z < 0.298;
+
+                const w = Math.min(1, Math.max(w_chest, w_muzzle, w_front, w_hind, whiteTailTip * 0.75)) * (isEar ? 0 : 1);
+
+                r = lerp(r, pal.white[0], w);
+                g = lerp(g, pal.white[1], w);
+                b = lerp(b, pal.white[2], w);
+
+                r = lerp(r, pal.pink[0], isInnerEar * 0.65);
+                g = lerp(g, pal.pink[1], isInnerEar * 0.65);
+                b = lerp(b, pal.pink[2], isInnerEar * 0.65);
+
+                colors[i * 3]     = Math.min(1, Math.max(0, r));
+                colors[i * 3 + 1] = Math.min(1, Math.max(0, g));
+                colors[i * 3 + 2] = Math.min(1, Math.max(0, b));
+
+                const candidates = [];
+                for (let s = 0; s < segBones.length; s++) {
+                    const sb = segBones[s];
+                    const d2 = distToSegSq(x, y, z, sb.a, sb.b);
+                    const wVal = Math.exp(-d2 / (sb.sigma * sb.sigma));
+                    if (wVal > 1e-5) candidates.push({ idx: sb.idx, w: wVal });
+                }
+                candidates.sort((a, b) => b.w - a.w);
+                while (candidates.length < 4) candidates.push({ idx: 0, w: 0 });
+
+                let sumW = candidates[0].w + candidates[1].w + candidates[2].w + candidates[3].w;
+                if (sumW < 1e-6) { candidates[0].w = 1; sumW = 1; }
+
+                for (let k = 0; k < 4; k++) {
+                    skinIndices[i * 4 + k] = candidates[k].idx;
+                    skinWeights[i * 4 + k] = candidates[k].w / sumW;
+                }
+            }
+
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+            geometry.setAttribute('furLength', new THREE.BufferAttribute(furLengths, 1));
+            geometry.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
+            geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
+        }
+
+        function createFurShellGeometry(baseGeo, layerFraction) {
+            const shellGeo = baseGeo.clone();
+            const pos = shellGeo.attributes.position;
+            const norm = shellGeo.attributes.normal;
+            const furLen = baseGeo.attributes.furLength;
+            const col = shellGeo.attributes.color;
+
+            const shade = 0.90 + 0.14 * layerFraction;
+            const droop = 0.0020 * layerFraction * layerFraction * furThicknessMultiplier;
+
+            for (let i = 0; i < pos.count; i++) {
+                const d = furLen.getX(i) * layerFraction * furThicknessMultiplier;
+                const nx = norm.getX(i), ny = norm.getY(i), nz = norm.getZ(i);
+                const py = pos.getY(i);
+                const groundMask = sst(0.005, 0.035, py);
+
+                pos.setXYZ(
+                    i,
+                    pos.getX(i) + nx * d,
+                    pos.getY(i) + (ny * d - droop) * groundMask,
+                    pos.getZ(i) + (nz * d - droop * 0.4)
+                );
+
+                col.setXYZ(
+                    i,
+                    Math.min(1, col.getX(i) * shade),
+                    Math.min(1, col.getY(i) * shade),
+                    Math.min(1, col.getZ(i) * shade)
+                );
+            }
+            return shellGeo;
+        }
+
+        function createRealCatEye(sideSign) {
+            const group = new THREE.Group();
+            // Slightly flattened almond-contoured eyeball that sits naturally inside the socket
+            const eyeGeo = new THREE.SphereGeometry(0.0098, 36, 28);
+            eyeGeo.scale(1.04, 0.88, 0.72);
+            const pos = eyeGeo.attributes.position;
+            const colors = new Float32Array(pos.count * 3);
+            const v = new THREE.Vector3();
+
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i).normalize();
+                const nx = v.x, ny = v.y, nz = v.z;
+                const R = Math.sqrt(nx * nx + ny * ny);
+                const ang = Math.atan2(ny, nx);
+
+                // Deep emerald-olive & warm sea-green iris like IMG_20261018_231648.jpg
+                const inner = [0.68, 0.78, 0.36];
+                const outer = [0.24, 0.50, 0.25];
+                const dark  = [0.05, 0.04, 0.03];
+
+                const t = sst(0.14, 0.76, R);
+                const ray = 1 + 0.14 * Math.sin(ang * 24 + 3 * R);
+                let r = lerp(inner[0], outer[0], t) * ray;
+                let g = lerp(inner[1], outer[1], t) * ray;
+                let b = lerp(inner[2], outer[2], t) * ray;
+
+                // Upper lid shadow across the top of the cornea for realistic hooded gaze
+                const upperShade = sst(0.10, 0.55, ny);
+                r *= (1.0 - 0.38 * upperShade);
+                g *= (1.0 - 0.38 * upperShade);
+                b *= (1.0 - 0.38 * upperShade);
+
+                const limb = sst(0.60, 0.78, R);
+                r = lerp(r, dark[0], limb);
+                g = lerp(g, dark[1], limb);
+                b = lerp(b, dark[2], limb);
+
+                // Feline vertical oval pupil
+                const pup = Math.pow(nx / 0.21, 2) + Math.pow(ny / 0.60, 2);
+                const pupSoft = sst(1.08, 0.72, pup);
+                r = lerp(r, 0.01, pupSoft);
+                g = lerp(g, 0.01, pupSoft);
+                b = lerp(b, 0.01, pupSoft);
+
+                // Crisp natural catchlight
+                const glint1 = sst(0.032, 0.004, Math.pow(nx - 0.22, 2) + Math.pow(ny - 0.22, 2));
+                const glint2 = sst(0.014, 0.002, Math.pow(nx + 0.18, 2) + Math.pow(ny + 0.20, 2)) * 0.5;
+                const glint = Math.min(1, glint1 + glint2);
+                r = lerp(r, 1.0, glint);
+                g = lerp(g, 1.0, glint);
+                b = lerp(b, 1.0, glint);
+
+                if (nz < 0.08) { r = 0.05; g = 0.04; b = 0.03; }
+
+                colors[i * 3]     = Math.min(1, Math.max(0, r));
+                colors[i * 3 + 1] = Math.min(1, Math.max(0, g));
+                colors[i * 3 + 2] = Math.min(1, Math.max(0, b));
+            }
+            eyeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            const eyeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.06, metalness: 0.04 });
+            group.add(new THREE.Mesh(eyeGeo, eyeMat));
+
+            // Sleek upper eyelid fold & feline eyeliner (almond-shaped, no bulging ring!)
+            const upperLidCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-sideSign * 0.0092, -0.0018, 0.0038),
+                new THREE.Vector3(-sideSign * 0.0040,  0.0046, 0.0068),
+                new THREE.Vector3( sideSign * 0.0035,  0.0052, 0.0064),
+                new THREE.Vector3( sideSign * 0.0098,  0.0012, 0.0028)
+            ]);
+            const upperLidGeo = new THREE.TubeGeometry(upperLidCurve, 20, 0.0016, 8, false);
+            const lidMat = new THREE.MeshStandardMaterial({ color: 0x3b1f12, roughness: 0.65 });
+            group.add(new THREE.Mesh(upperLidGeo, lidMat));
+
+            // Subtle lower eyelid line
+            const lowerLidCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-sideSign * 0.0090, -0.0020, 0.0038),
+                new THREE.Vector3(0,                  -0.0058, 0.0062),
+                new THREE.Vector3( sideSign * 0.0095,  0.0008, 0.0028)
+            ]);
+            const lowerLidGeo = new THREE.TubeGeometry(lowerLidCurve, 16, 0.0010, 8, false);
+            group.add(new THREE.Mesh(lowerLidGeo, lidMat));
+
+            return group;
+        }
+
+        function createDetailedCatNose() {
+            const noseGroup = new THREE.Group();
+
+            // Anatomical feline nose leather (rhinarium): triangular heart shape with nostrils & philtrum groove
+            const noseGeo = new THREE.SphereGeometry(1, 32, 24);
+            const pos = noseGeo.attributes.position;
+            const colors = new Float32Array(pos.count * 3);
+
+            for (let i = 0; i < pos.count; i++) {
+                let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+                const ax = Math.abs(x);
+
+                // Sculpt into a real feline triangular nose leather: wider at top wings, tapering down to septum
+                const topWing = sst(-0.6, 0.6, y);
+                let sx = x * (0.0030 + 0.0062 * topWing);
+                let sy = y * 0.0062;
+                let sz = z * 0.0052;
+
+                // Subtle top M-indentation & central philtrum groove
+                sy -= 0.0010 * Math.exp(-x * x * 12.0) * sst(0.2, 1.0, y);
+                if (z > 0) {
+                    sz -= 0.0007 * Math.exp(-x * x * 35.0) * sst(0.3, -0.9, y);
+                }
+
+                // Nostril indentations on the left & right lower sides
+                const nostrilDist = Math.sqrt(Math.pow(ax - 0.52, 2) + Math.pow(y + 0.12, 2) + Math.pow(z - 0.55, 2));
+                const nostrilMask = sst(0.38, 0.08, nostrilDist);
+                sz -= 0.0018 * nostrilMask;
+
+                pos.setXYZ(i, sx, sy, sz);
+
+                // Coloring matching IMG_20261018_231648.jpg: warm rose-pink center with terracotta-brown outline & dark nostrils
+                const rimFactor = sst(0.45, 0.92, Math.sqrt(x * x * 0.85 + y * y));
+                let r = lerp(0.92, 0.46, rimFactor);
+                let g = lerp(0.54, 0.22, rimFactor);
+                let b = lerp(0.51, 0.17, rimFactor);
+
+                r = lerp(r, 0.16, nostrilMask * 0.88);
+                g = lerp(g, 0.07, nostrilMask * 0.88);
+                b = lerp(b, 0.06, nostrilMask * 0.88);
+
+                colors[i * 3]     = r;
+                colors[i * 3 + 1] = g;
+                colors[i * 3 + 2] = b;
+            }
+
+            noseGeo.computeVertexNormals();
+            noseGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            const noseMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.36,
+                metalness: 0.03
+            });
+            const noseLeather = new THREE.Mesh(noseGeo, noseMat);
+            noseGroup.add(noseLeather);
+
+            // Mouth / philtrum line (перевернутая Y-линия губок под носиком)
+            const mouthMat = new THREE.MeshStandardMaterial({ color: 0x4a2518, roughness: 0.6 });
+            const philtrumCurve = new THREE.LineCurve3(
+                new THREE.Vector3(0, -0.0045, 0.0032),
+                new THREE.Vector3(0, -0.0105, 0.0010)
+            );
+            noseGroup.add(new THREE.Mesh(new THREE.TubeGeometry(philtrumCurve, 6, 0.00055, 6, false), mouthMat));
+
+            for (const s of [-1, 1]) {
+                const lipCurve = new THREE.QuadraticBezierCurve3(
+                    new THREE.Vector3(0, -0.0102, 0.0010),
+                    new THREE.Vector3(s * 0.0055, -0.0122, -0.0005),
+                    new THREE.Vector3(s * 0.0110, -0.0098, -0.0035)
+                );
+                noseGroup.add(new THREE.Mesh(new THREE.TubeGeometry(lipCurve, 10, 0.0005, 6, false), mouthMat));
+            }
+
+            return noseGroup;
+        }
+
+        function buildProceduralCat() {
+            while (catRoot.children.length) catRoot.remove(catRoot.children[0]);
+            if (skeletonHelper) { scene.remove(skeletonHelper); skeletonHelper = null; }
+            bones = {};
+            catMeshes = [];
+
+            const baseFurMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.84,
+                metalness: 0.02,
+                bumpMap: detailedFurBump,
+                bumpScale: 0.003,
+                side: THREE.DoubleSide,
+                skinning: true
+            });
+            const whiskerMat = new THREE.MeshStandardMaterial({ color: 0xfcfbf7, roughness: 0.25 });
+
+            const boneDefs = [
+                ["Root", null, [0, 0, 0]],
+                ["Pelvis", "Root", [0, 0.20, -0.135]],
+                ["Spine1", "Pelvis", [0, 0.20, -0.07]],
+                ["Spine2", "Spine1", [0, 0.20, 0.01]],
+                ["Chest", "Spine2", [0, 0.20, 0.09]],
+                ["Neck", "Chest", [0, 0.235, 0.175]],
+                ["Head", "Neck", [0, 0.285, 0.25]],
+                ["Ear_L", "Head", [0.034, 0.352, 0.278]],
+                ["Ear_R", "Head", [-0.034, 0.352, 0.278]]
+            ];
+            for (let i = 0; i < 5; i++) {
+                boneDefs.push([`Tail${i + 1}`, i === 0 ? "Pelvis" : `Tail${i}`, TAIL_PTS[i]]);
+            }
+            for (const [s, S] of [[1, "L"], [-1, "R"]]) {
+                boneDefs.push([`FrontUpper_${S}`, "Chest", [s * 0.035, 0.195, 0.122]]);
+                boneDefs.push([`FrontLower_${S}`, `FrontUpper_${S}`, [s * 0.034, 0.095, 0.125]]);
+                boneDefs.push([`FrontPaw_${S}`, `FrontLower_${S}`, [s * 0.033, 0.024, 0.136]]);
+                boneDefs.push([`HindUpper_${S}`, "Pelvis", [s * 0.042, 0.200, -0.125]]);
+                boneDefs.push([`HindLower_${S}`, `HindUpper_${S}`, [s * 0.044, 0.132, -0.088]]);
+                boneDefs.push([`HindHock_${S}`, `HindLower_${S}`, [s * 0.040, 0.070, -0.178]]);
+                boneDefs.push([`HindPaw_${S}`, `HindHock_${S}`, [s * 0.038, 0.020, -0.148]]);
+            }
+
+            const worldPosMap = {};
+            const boneList = [];
+            boneDefs.forEach(([name, parent, wPos]) => {
+                const b = new THREE.Bone();
+                b.name = name;
+                worldPosMap[name] = wPos;
+                if (parent) {
+                    const pPos = worldPosMap[parent];
+                    b.position.set(wPos[0] - pPos[0], wPos[1] - pPos[1], wPos[2] - pPos[2]);
+                    bones[parent].add(b);
+                } else {
+                    b.position.set(wPos[0], wPos[1], wPos[2]);
+                    catRoot.add(b);
+                }
+                bones[name] = b;
+                boneList.push(b);
+            });
+
+            catRoot.updateMatrixWorld(true);
+
+            const unifiedGeo = generateUnifiedSmoothCatGeometry();
+            colorAndSkinUnifiedCat(unifiedGeo, boneList);
+
+            const skeleton = new THREE.Skeleton(boneList);
+
+            // Base solid skin/undercoat mesh (casts clean shadow onto podium without self-shadowing artifacts)
+            const skinnedCatMesh = new THREE.SkinnedMesh(unifiedGeo, baseFurMat);
+            skinnedCatMesh.castShadow = true;
+            skinnedCatMesh.receiveShadow = false;
+            skinnedCatMesh.add(bones["Root"]);
+            skinnedCatMesh.bind(skeleton);
+            catRoot.add(skinnedCatMesh);
+            catMeshes.push(skinnedCatMesh);
+            chestMesh = bones["Chest"];
+
+            // Multi-Layer Volumetric Fur Shells (8 concentric layers, zero shadow-map self-acne on back)
+            if (furThicknessMultiplier > 0.02) {
+                const SHELL_LAYERS = 8;
+                for (let layer = 1; layer <= SHELL_LAYERS; layer++) {
+                    const frac = layer / SHELL_LAYERS;
+                    const shellGeo = createFurShellGeometry(unifiedGeo, frac);
+                    const shellMat = new THREE.MeshStandardMaterial({
+                        vertexColors: true,
+                        roughness: 0.88,
+                        metalness: 0.01,
+                        alphaMap: furShellAlphaMap,
+                        alphaTest: 0.16 + 0.68 * Math.pow(frac, 0.85),
+                        bumpMap: detailedFurBump,
+                        bumpScale: 0.002,
+                        side: THREE.DoubleSide,
+                        skinning: true
+                    });
+                    const shellMesh = new THREE.SkinnedMesh(shellGeo, shellMat);
+                    shellMesh.castShadow = false;
+                    shellMesh.receiveShadow = false;
+                    shellMesh.bind(skeleton);
+                    catRoot.add(shellMesh);
+                    catMeshes.push(shellMesh);
+                }
+            }
+
+            // Wider-set, naturally recessed 3D eyes, brow whiskers & cheek whiskers attached to Head bone
+            for (const [s, S] of [[1, "L"], [-1, "R"]]) {
+                const eye = createRealCatEye(s);
+                eye.name = `Eye_${S}`;
+                // Positioned wider apart (x = ±0.0255) and deeper into the eye sockets (z = 0.075)
+                eye.position.set(s * 0.0255, 0.0355, 0.0755);
+                eye.rotation.y = s * 0.22;
+                eye.rotation.z = -s * 0.08;
+                bones["Head"].add(eye);
+                bones[`Eye_${S}`] = eye;
+
+                // Long white muzzle whiskers
+                [[0.014, 0.088, 0.020], [0.017, 0.090, 0.005], [0.020, 0.089, -0.010], [0.023, 0.086, -0.022]].forEach(([ry, rz, dy], row) => {
+                    const curve = new THREE.QuadraticBezierCurve3(
+                        new THREE.Vector3(s * 0.015, ry, rz),
+                        new THREE.Vector3(s * 0.050, ry + dy * 0.45, rz + 0.006),
+                        new THREE.Vector3(s * 0.096, ry + dy, rz + (0.010 - row * 0.004))
+                    );
+                    const wGeo = new THREE.TubeGeometry(curve, 12, 0.00034, 6, false);
+                    bones["Head"].add(new THREE.Mesh(wGeo, whiskerMat));
+                });
+
+                // Expressive brow whiskers above eyes (как на фото твоей кошки)
+                [[0.050, 0.074, 0.026], [0.052, 0.072, 0.032]].forEach(([ry, rz, dy], idx) => {
+                    const browCurve = new THREE.QuadraticBezierCurve3(
+                        new THREE.Vector3(s * 0.020, ry, rz),
+                        new THREE.Vector3(s * (0.038 + idx * 0.006), ry + dy * 0.7, rz - 0.002),
+                        new THREE.Vector3(s * (0.056 + idx * 0.008), ry + dy, rz - 0.008)
+                    );
+                    const bwGeo = new THREE.TubeGeometry(browCurve, 10, 0.00026, 6, false);
+                    bones["Head"].add(new THREE.Mesh(bwGeo, whiskerMat));
+                });
+            }
+
+            // Detailed anatomical 3D nose placed right at the tip of the muzzle (clear of all fur layers!)
+            const detailedNose = createDetailedCatNose();
+            detailedNose.position.set(0, 0.0225, 0.1025);
+            bones["Head"].add(detailedNose);
+
+            skeletonHelper = new THREE.SkeletonHelper(bones["Root"]);
+            skeletonHelper.visible = document.getElementById('skeleton-toggle').checked;
+            scene.add(skeletonHelper);
+        }
+
+        buildProceduralCat();
+
+        let activeClip = 'All_Idle';
+        let clock = new THREE.Clock();
+        let mouseTarget = { x: 0, y: 0 };
+        const WALK_PH = { HindUpper_L: 0.0, FrontUpper_L: 0.25, HindUpper_R: 0.5, FrontUpper_R: 0.75 };
+
+        function legCycle(u, A, liftAmp, stance = 0.62) {
+            u = ((u % 1.0) + 1.0) % 1.0;
+            if (u < stance) {
+                const k = u / stance;
+                return [-A + 2 * A * k, 0.0];
+            }
+            const k = (u - stance) / (1 - stance);
+            const e = k * k * (3 - 2 * k);
+            return [A - 2 * A * e, Math.sin(Math.PI * k) * liftAmp];
+        }
+
+        function keysCurve(keys, t) {
+            if (t <= keys[0][0]) return keys[0][1];
+            for (let i = 0; i < keys.length - 1; i++) {
+                const [t0, v0] = keys[i];
+                const [t1, v1] = keys[i + 1];
+                if (t >= t0 && t <= t1) {
+                    const u = t1 > t0 ? (t - t0) / (t1 - t0) : 1;
+                    return v0 + (v1 - v0) * (u * u * (3 - 2 * u));
+                }
+            }
+            return keys[keys.length - 1][1];
+        }
+
+        function resetBonesRotation() {
+            Object.values(bones).forEach(b => {
+                if (b.isBone) {
+                    b.rotation.set(0, 0, 0);
+                    b.scale.set(1, 1, 1);
+                }
+            });
+            if (bones["Root"]) bones["Root"].position.set(0, 0, 0);
+            if (bones["Eye_L"]) bones["Eye_L"].rotation.set(0, 0.22, -0.08);
+            if (bones["Eye_R"]) bones["Eye_R"].rotation.set(0, -0.22, 0.08);
+        }
+
+        function updateProceduralAnimations(elapsed) {
+            if (!bones["Root"]) return;
+            resetBonesRotation();
+
+            if (activeClip === 'Idle_Breathing' || activeClip === 'All_Idle') {
+                const D = 4.0;
+                const w = 2 * Math.PI * (elapsed % D) / D;
+                const s = Math.sin(w);
+                bones["Spine1"].rotation.x += 0.008 * s;
+                bones["Spine2"].rotation.x += 0.012 * s;
+                bones["Chest"].rotation.x  += 0.016 * s;
+                bones["Neck"].rotation.x   -= 0.020 * s;
+                bones["Head"].rotation.x   -= 0.010 * s;
+
+                const breathWeight = 0.5 - 0.5 * Math.cos(w);
+                if (chestMesh && document.getElementById('breathe-val').textContent === 'Авто') {
+                    chestMesh.scale.set(1 + 0.04 * breathWeight, 1 + 0.03 * breathWeight, 1 + 0.02 * breathWeight);
+                    document.getElementById('breathe-slider').value = breathWeight.toFixed(2);
+                }
+            }
+
+            if (activeClip === 'Tail_Idle' || activeClip === 'All_Idle') {
+                const D = 4.0;
+                const w = 2 * Math.PI * (elapsed % D) / D;
+                const A = [0.08, 0.14, 0.20, 0.26, 0.32];
+                const B = [0.03, 0.05, 0.08, 0.10, 0.12];
+                for (let i = 0; i < 5; i++) {
+                    bones[`Tail${i + 1}`].rotation.x += B[i] * Math.sin(2 * w - 0.6 * i);
+                    bones[`Tail${i + 1}`].rotation.y += A[i] * Math.sin(w - 0.75 * i);
+                }
+            }
+
+            if (activeClip === 'Idle_LookAround' || activeClip === 'All_Idle') {
+                const t = elapsed % 8.0;
+                const yawKeys = [[0, 0], [0.7, 0], [1.8, 0.45], [3.2, 0.45], [4.2, -0.05], [5.2, -0.50], [6.4, -0.50], [7.4, 0], [8, 0]];
+                const pitKeys = [[0, 0], [1.8, -0.08], [3.2, 0.04], [5.2, 0.06], [6.4, -0.05], [8, 0]];
+                const y = keysCurve(yawKeys, t);
+                const p = keysCurve(pitKeys, t);
+                bones["Neck"].rotation.x += p * 0.4;
+                bones["Neck"].rotation.y += y * 0.35;
+                bones["Head"].rotation.x += p * 0.6;
+                bones["Head"].rotation.y += y * 0.65;
+            }
+
+            if (activeClip === 'HeadTilt') {
+                const t = elapsed % 2.6;
+                const rollKeys = [[0, 0], [0.5, 0.38], [1.7, 0.38], [2.4, 0], [2.6, 0]];
+                const pitKeys  = [[0, 0], [0.5, -0.1], [1.7, -0.1], [2.4, 0], [2.6, 0]];
+                const r = keysCurve(rollKeys, t);
+                const p = keysCurve(pitKeys, t);
+                bones["Neck"].rotation.set(p * 0.3, 0, r * 0.25);
+                bones["Head"].rotation.set(p * 0.7, 0, r * 0.75);
+            }
+
+            if (activeClip === 'Walk') {
+                const D = 1.2;
+                const t = elapsed % D;
+                const u = t / D;
+                const w = 2 * Math.PI * t / D;
+
+                for (const S of ["L", "R"]) {
+                    let ph = WALK_PH[`FrontUpper_${S}`];
+                    let [a, lf] = legCycle(u - ph, 0.27, 0.9);
+                    bones[`FrontUpper_${S}`].rotation.x = a;
+                    bones[`FrontLower_${S}`].rotation.x = lf * 0.85 + 0.06;
+                    bones[`FrontPaw_${S}`].rotation.x   = -lf * 0.55 - a * 0.35;
+
+                    ph = WALK_PH[`HindUpper_${S}`];
+                    [a, lf] = legCycle(u - ph, 0.26, 0.8);
+                    bones[`HindUpper_${S}`].rotation.x = a;
+                    bones[`HindLower_${S}`].rotation.x = -lf * 0.55 + a * 0.20;
+                    bones[`HindHock_${S}`].rotation.x  = lf * 0.75 - a * 0.15;
+                    bones[`HindPaw_${S}`].rotation.x   = -lf * 0.55 - 0.05;
+                }
+                const sw = Math.sin(w);
+                bones["Pelvis"].rotation.y = -0.035 * sw;
+                bones["Spine2"].rotation.y = 0.035 * sw;
+                bones["Head"].rotation.y   = -0.02 * sw;
+                bones["Root"].position.y = 0.004 * Math.sin(2 * w + 0.6);
+            }
+
+            if (document.getElementById('track-mouse-toggle').checked) {
+                bones["Head"].rotation.y += mouseTarget.x * 0.35;
+                bones["Head"].rotation.x += mouseTarget.y * 0.25;
+            }
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            mouseTarget.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseTarget.y = (e.clientY / window.innerHeight) * 2 - 1;
+        });
+
+        document.querySelectorAll('.anim-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.anim-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeClip = btn.dataset.clip;
+            });
+        });
+
+        document.querySelectorAll('.coat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const selectedCoat = btn.dataset.coat;
+                document.querySelectorAll('.coat-btn').forEach(b => {
+                    b.className = b.dataset.coat === selectedCoat
+                        ? 'coat-btn active px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 border border-amber-500/50 text-amber-200 transition'
+                        : 'coat-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition';
+                });
+                currentCoat = selectedCoat;
+                buildProceduralCat();
+            });
+        });
+
+        const settingsDrawer = document.getElementById('settings-drawer');
+        function toggleSettingsDrawer(forceClose = false) {
+            const isHidden = settingsDrawer.classList.contains('translate-x-[120%]');
+            if (isHidden && !forceClose) {
+                settingsDrawer.classList.remove('translate-x-[120%]', 'opacity-0');
+                settingsDrawer.classList.add('translate-x-0', 'opacity-100');
+                if (window.innerWidth < 768) toggleVitalsPanel(true);
+            } else {
+                settingsDrawer.classList.add('translate-x-[120%]', 'opacity-0');
+                settingsDrawer.classList.remove('translate-x-0', 'opacity-100');
+            }
+        }
+        document.getElementById('toggle-settings-btn').addEventListener('click', () => toggleSettingsDrawer());
+        document.getElementById('close-settings-btn').addEventListener('click', () => toggleSettingsDrawer(true));
+
+        const vitalsPanel = document.getElementById('vitals-panel');
+        const statsChevron = document.getElementById('stats-chevron');
+        let vitalsCollapsed = window.innerWidth < 640;
+
+        function applyVitalsState() {
+            if (vitalsCollapsed) {
+                vitalsPanel.classList.add('-translate-x-[120%]', 'opacity-0', 'pointer-events-none');
+                vitalsPanel.classList.remove('translate-x-0', 'opacity-100', 'pointer-events-auto');
+                statsChevron.classList.add('-rotate-90');
+            } else {
+                vitalsPanel.classList.remove('-translate-x-[120%]', 'opacity-0', 'pointer-events-none');
+                vitalsPanel.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
+                statsChevron.classList.remove('-rotate-90');
+            }
+        }
+        function toggleVitalsPanel(forceCollapse = null) {
+            vitalsCollapsed = forceCollapse !== null ? forceCollapse : !vitalsCollapsed;
+            applyVitalsState();
+        }
+        applyVitalsState();
+
+        document.getElementById('toggle-stats-btn').addEventListener('click', () => toggleVitalsPanel());
+        document.getElementById('collapse-vitals-inner').addEventListener('click', () => toggleVitalsPanel(true));
+
+        const petStats = { hunger: 82, happy: 90, energy: 75, groom: 88 };
+        function updatePetStatsUI() {
+            document.getElementById('stat-hunger-text').textContent = `${petStats.hunger}%`;
+            document.getElementById('stat-hunger-bar').style.width = `${petStats.hunger}%`;
+            document.getElementById('stat-happy-text').textContent = `${petStats.happy}%`;
+            document.getElementById('stat-happy-bar').style.width = `${petStats.happy}%`;
+            document.getElementById('stat-energy-text').textContent = `${petStats.energy}%`;
+            document.getElementById('stat-energy-bar').style.width = `${petStats.energy}%`;
+            document.getElementById('stat-groom-text').textContent = `${petStats.groom}%`;
+            document.getElementById('stat-groom-bar').style.width = `${petStats.groom}%`;
+
+            const tasks = document.querySelectorAll('.care-task');
+            let done = 0;
+            tasks.forEach(t => {
+                if (t.checked) done++;
+                t.nextElementSibling.classList.toggle('line-through', t.checked);
+                t.nextElementSibling.classList.toggle('opacity-60', t.checked);
+            });
+            document.getElementById('tasks-counter').textContent = `${done}/${tasks.length}`;
+        }
+
+        document.querySelectorAll('.care-task').forEach(cb => cb.addEventListener('change', updatePetStatsUI));
+
+        function spawnFloatingEmoji(emoji) {
+            const el = document.createElement('div');
+            el.className = 'floating-emoji text-3xl';
+            el.textContent = emoji;
+            el.style.left = `${window.innerWidth / 2 + (Math.random() * 80 - 40)}px`;
+            el.style.top = `${window.innerHeight / 2 - 40}px`;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1200);
+        }
+
+        function setAnimationClip(clipName, moodText) {
+            activeClip = clipName;
+            document.querySelectorAll('.anim-btn').forEach(b => b.classList.toggle('active', b.dataset.clip === clipName));
+            if (moodText) document.getElementById('pet-mood-badge').textContent = moodText;
+        }
+
+        document.getElementById('care-feed-btn').addEventListener('click', () => {
+            petStats.hunger = Math.min(100, petStats.hunger + 15);
+            updatePetStatsUI();
+            spawnFloatingEmoji('🍗');
+            setAnimationClip('HeadTilt', '😋 Кушает с аппетитом!');
+            setTimeout(() => setAnimationClip('All_Idle', '🐾 Счастлив и мурчит'), 3000);
+        });
+
+        document.getElementById('care-pet-btn').addEventListener('click', () => {
+            petStats.happy = Math.min(100, petStats.happy + 10);
+            updatePetStatsUI();
+            spawnFloatingEmoji('❤️');
+            setAnimationClip('HeadTilt', '😻 Мурчит от ласки');
+            setTimeout(() => setAnimationClip('All_Idle', '🐾 Счастлив и мурчит'), 3000);
+        });
+
+        document.getElementById('care-brush-btn').addEventListener('click', () => {
+            petStats.groom = Math.min(100, petStats.groom + 10);
+            document.getElementById('task-brush').checked = true;
+            updatePetStatsUI();
+            spawnFloatingEmoji('✨');
+            setAnimationClip('Tail_Idle', '✨ Шерсть шелковистая!');
+            setTimeout(() => setAnimationClip('All_Idle', '🐾 Счастлив и мурчит'), 3000);
+        });
+
+        document.getElementById('care-play-btn').addEventListener('click', () => {
+            petStats.happy = Math.min(100, petStats.happy + 10);
+            document.getElementById('task-play').checked = true;
+            updatePetStatsUI();
+            spawnFloatingEmoji('🧶');
+            setAnimationClip('Walk', '🐾 Активная игра!');
+            setTimeout(() => setAnimationClip('All_Idle', '🐾 Счастлив и мурчит'), 4000);
+        });
+
+        document.getElementById('care-sleep-btn').addEventListener('click', () => {
+            petStats.energy = Math.min(100, petStats.energy + 20);
+            updatePetStatsUI();
+            spawnFloatingEmoji('💤');
+            setAnimationClip('Idle_Breathing', '💤 Спит сладко');
+        });
+
+        document.getElementById('fur-slider').addEventListener('change', (e) => {
+            furThicknessMultiplier = parseFloat(e.target.value);
+            document.getElementById('fur-val').textContent = Math.round(furThicknessMultiplier * 100) + '%';
+            buildProceduralCat();
+        });
+        document.getElementById('fur-slider').addEventListener('input', (e) => {
+            document.getElementById('fur-val').textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
+        });
+
+        document.getElementById('breathe-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('breathe-val').textContent = Math.round(val * 100) + '%';
+            if (chestMesh) chestMesh.scale.set(1 + 0.05 * val, 1 + 0.035 * val, 1 + 0.025 * val);
+        });
+
+        document.getElementById('skeleton-toggle').addEventListener('change', (e) => {
+            if (skeletonHelper) skeletonHelper.visible = e.target.checked;
+        });
+
+        document.getElementById('wireframe-toggle').addEventListener('change', (e) => {
+            catRoot.traverse(obj => { if (obj.isMesh && obj.material) obj.material.wireframe = e.target.checked; });
+        });
+
+        document.getElementById('reset-cam-btn').addEventListener('click', () => {
+            const isMob = window.innerWidth < 640;
+            camera.position.set(isMob ? 0.60 : 0.45, isMob ? 0.35 : 0.30, isMob ? 0.85 : 0.65);
+            controls.target.set(0, 0.21, 0.05);
+            controls.update();
+        });
+
+        document.getElementById('export-glb-btn').addEventListener('click', () => {
+            const btn = document.getElementById('export-glb-btn');
+            const oldHtml = btn.innerHTML;
+            btn.textContent = 'Упаковка GLB...';
+            new THREE.GLTFExporter().parse(catRoot, (result) => {
+                const blob = new Blob([result], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'petly_cat.glb';
+                a.click();
+                URL.revokeObjectURL(url);
+                btn.innerHTML = oldHtml;
+            }, { binary: true });
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+            updateProceduralAnimations(elapsed);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            animate();
+        };
+    </script>
+</body>
+</html>
